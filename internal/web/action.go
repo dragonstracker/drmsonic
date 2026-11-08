@@ -1,0 +1,1126 @@
+package web
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+
+	"drmsonic/internal/config"
+	"drmsonic/internal/state"
+)
+
+type actionRequest struct {
+	Action       string           `json:"Action"`
+	ProviderId   string           `json:"ProviderId"`
+	ProviderName string           `json:"ProviderName"`
+	Streams      []map[string]any `json:"Streams"`
+	Provider     map[string]any   `json:"Provider"`
+	User         map[string]any   `json:"User"`
+	Users        []map[string]any `json:"Users"`
+	Raw          map[string]any   `json:"-"`
+}
+
+func (r *actionRequest) userPayload() map[string]any {
+	if r.User != nil {
+		return r.User
+	}
+	if len(r.Users) > 0 {
+		return r.Users[0]
+	}
+	return nil
+}
+
+func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "invalid action", http.StatusInternalServerError)
+		return
+	}
+
+	var raw map[string]any
+	dec := json.NewDecoder(r.Body)
+	dec.UseNumber()
+	if err := dec.Decode(&raw); err != nil {
+		http.Error(w, "bad request body", http.StatusInternalServerError)
+		return
+	}
+
+	req := actionRequest{Raw: raw}
+	req.Action = str(mapGet(raw, "Action"))
+	req.ProviderId = str(mapGet(raw, "ProviderId"))
+	req.ProviderName = str(mapGet(raw, "ProviderName"))
+	if list, ok := raw["Streams"].([]any); ok {
+		for _, e := range list {
+			if m, ok := e.(map[string]any); ok {
+				req.Streams = append(req.Streams, m)
+			}
+		}
+	}
+	if list, ok := raw["Users"].([]any); ok {
+		for _, e := range list {
+			if m, ok := e.(map[string]any); ok {
+				req.Users = append(req.Users, m)
+			}
+		}
+	}
+	if m, ok := raw["Provider"].(map[string]any); ok {
+		req.Provider = m
+	}
+	if m, ok := raw["User"].(map[string]any); ok {
+		req.User = m
+	}
+
+	if req.Action == "" {
+		http.Error(w, "invalid action", http.StatusInternalServerError)
+		return
+	}
+
+	switch req.Action {
+	case "getstatus":
+		s.acGetStatus(w, r, req)
+	case "getconf":
+		s.acGetConf(w, req)
+	case "getmonitoring":
+		s.acGetMonitoring(w, req)
+	case "getrecordings":
+		s.renderJSON(w, []config.Recording{})
+	case "getreplays":
+		s.renderJSON(w, []config.Recording{})
+	case "getevents":
+		s.renderJSON(w, map[string]any{"Entries": []any{}, "Timezone": "UTC"})
+	case "start", "stop", "restart":
+		s.acStartStop(w, req)
+	case "save":
+		s.acSave(w, req)
+	case "updatestream":
+		s.acUpdateStream(w, req)
+	case "addchannel":
+		s.acAddChannel(w, req)
+	case "deletestream":
+		s.acDeleteStream(w, req)
+	case "renamechannel":
+		s.acRenameChannel(w, req)
+	case "addprovider":
+		s.acAddProvider(w, req)
+	case "deleteprovider":
+		s.acDeleteProvider(w, req)
+	case "renameprovider":
+		s.acRenameProvider(w, req)
+	case "refresh", "rescanproviders":
+		if err := s.store.Load(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.mgr.BumpGlobal()
+		s.renderJSON(w, "ok")
+	case "updateglobal", "applyglobalnetwork":
+		s.acUpdateGlobal(w, req)
+	case "massupdate", "massupdateselection", "massupdateparams", "massupdateset", "massupdateunset":
+		s.acMassUpdate(w, req)
+	case "adduser":
+		s.acAddUser(w, req)
+	case "updateuser":
+		s.acUpdateUser(w, req)
+	case "deleteuser":
+		s.acDeleteUser(w, req)
+	case "renameuser":
+		s.acRenameUser(w, req)
+	case "addrec", "deleterec", "deletereplay", "stoprec":
+		s.renderJSON(w, "ok")
+	case "refreshkeys", "flushkeys":
+		s.mgr.BumpGlobal()
+		s.renderJSON(w, "ok")
+	case "channelsupdaterequest":
+		s.renderJSON(w, map[string]any{"Streams": []any{}, "Changes": 0})
+	case "channelsupdateapply":
+		s.renderJSON(w, "ok")
+	case "eventsrefreshrequest":
+		s.renderJSON(w, map[string]any{"Events": []any{}, "Changes": 0})
+	case "eventsrefreshapply":
+		s.renderJSON(w, "ok")
+	case "export":
+		s.acExport(w, req)
+	case "import":
+		s.acImport(w, req)
+	case "shutdown":
+		s.renderJSON(w, "ok")
+		go s.requestShutdown()
+	default:
+		http.Error(w, "invalid action", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) acGetStatus(w http.ResponseWriter, r *http.Request, req actionRequest) {
+	status := state.BuildStatus(s.store, s.mgr, s.baseFor(r))
+	if req.ProviderId != "" && req.ProviderId != "all" {
+		filtered := status.Providers[:0]
+		for _, p := range status.Providers {
+			if p.Id == req.ProviderId {
+				filtered = append(filtered, p)
+			}
+		}
+		status.Providers = filtered
+	}
+	ids := requestedIDs(req)
+	if len(ids) > 0 && !(len(ids) == 1 && ids[0] == "all") {
+		want := make(map[string]bool, len(ids))
+		for _, id := range ids {
+			want[id] = true
+		}
+		for i := range status.Providers {
+			kept := status.Providers[i].Streams[:0]
+			for _, st := range status.Providers[i].Streams {
+				if want[st.Id] {
+					kept = append(kept, st)
+				}
+			}
+			status.Providers[i].Streams = kept
+		}
+	}
+	s.renderJSON(w, status)
+}
+
+func (s *Server) acGetConf(w http.ResponseWriter, req actionRequest) {
+	p := s.providerOrError(w, req.ProviderId)
+	if p == nil {
+		return
+	}
+	ids := requestedIDs(req)
+	if len(ids) == 0 {
+		http.Error(w, "no stream provided", http.StatusInternalServerError)
+		return
+	}
+	out := providerToMap(p, false)
+	streams := make([]map[string]any, 0, len(p.Streams))
+	for i := range p.Streams {
+		st := &p.Streams[i]
+		if !matchIDs(ids, st.Id) {
+			continue
+		}
+		streams = append(streams, map[string]any{
+			"Id":     st.Id,
+			"Stream": streamToMap(st),
+		})
+	}
+	out["Streams"] = streams
+	if len(streams) == 0 {
+		http.Error(w, "no stream provided", http.StatusInternalServerError)
+		return
+	}
+	s.renderJSON(w, out)
+}
+
+func (s *Server) acGetMonitoring(w http.ResponseWriter, req actionRequest) {
+	providers := s.store.Providers()
+	readers := make([]any, 0)
+	for _, p := range providers {
+		for i := range p.Streams {
+			st := &p.Streams[i]
+			if ch := s.mgr.Get(p.Id, st.Id); ch != nil && ch.Running {
+				readers = append(readers, map[string]any{
+					"User":         "",
+					"Ip":           "",
+					"UserAgent":    "",
+					"StreamName":   fmt.Sprintf("%s/%s", p.Id, st.Id),
+					"ProviderName": p.Name,
+					"Bw":           0,
+					"BwColor":      "white",
+					"Uptime":       ch.StatusText(),
+					"Type":         "hls",
+				})
+			}
+		}
+	}
+	s.renderJSON(w, map[string]any{
+		"Readers":      readers,
+		"Memory":       runtimeMemory(),
+		"CpuLoad":      0.0,
+		"CpuLoadColor": "green",
+		"TotalBwIn":    0,
+		"TotalBwOut":   0,
+		"Timezone":     "UTC",
+	})
+}
+
+func (s *Server) acSave(w http.ResponseWriter, req actionRequest) {
+	p := s.providerOrError(w, req.ProviderId)
+	if p == nil {
+		return
+	}
+	if err := s.store.Put(p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acUpdateStream(w http.ResponseWriter, req actionRequest) {
+	p := s.providerOrError(w, req.ProviderId)
+	if p == nil {
+		return
+	}
+	for _, payload := range req.Streams {
+		id := str(mapGet(payload, "Id"))
+		if id == "" || id == "all" {
+			continue
+		}
+		st := p.FindStream(id)
+		if st == nil {
+			continue
+		}
+		applyStreamPayload(st, payload)
+		if ch := s.mgr.Get(p.Id, st.Id); ch != nil && ch.Running {
+			s.restartChannel(p, st)
+		}
+	}
+	if err := s.store.Put(p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acAddChannel(w http.ResponseWriter, req actionRequest) {
+	p := s.providerOrError(w, req.ProviderId)
+	if p == nil {
+		return
+	}
+	name := str(mapGet(req.Raw, "Name"))
+	if name == "" && len(req.Streams) > 0 {
+		name = str(mapGet(req.Streams[0], "Name"))
+	}
+	if name == "" {
+		http.Error(w, "missing stream name", http.StatusInternalServerError)
+		return
+	}
+	id := config.Slug(name)
+	if p.FindStream(id) != nil {
+		http.Error(w, "stream already exists", http.StatusInternalServerError)
+		return
+	}
+	p.Streams = append(p.Streams, config.Stream{
+		Id:           id,
+		Name:         name,
+		Mode:         config.ModeLive,
+		RunningMode:  p.EffectiveRunningMode(),
+		OutputMode:   p.EffectiveOutputMode(),
+		NetworkScope: "script,manifest,media",
+		CdmType:      config.CdmWidevine,
+		CdmMode:      config.CdmInternal,
+		NameColor:    "white",
+		StatusColor:  "red",
+	})
+	if err := s.store.Put(p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acStartStop(w http.ResponseWriter, req actionRequest) {
+	p := s.providerOrError(w, req.ProviderId)
+	if p == nil {
+		return
+	}
+	ids := requestedIDs(req)
+	autostartOnly := false
+	filtered := ids[:0]
+	for _, id := range ids {
+		if id == "autostart" {
+			autostartOnly = true
+			continue
+		}
+		filtered = append(filtered, id)
+	}
+	ids = filtered
+
+	for i := range p.Streams {
+		st := &p.Streams[i]
+		if autostartOnly {
+			if !st.Autostart {
+				continue
+			}
+		} else if !matchIDs(ids, st.Id) {
+			continue
+		}
+		switch req.Action {
+		case "start":
+			s.startChannel(p, st)
+		case "restart":
+			s.stopChannel(p.Id, st.Id)
+			s.startChannel(p, st)
+		default:
+			s.stopChannel(p.Id, st.Id)
+			s.media.drop(p.Id, st.Id)
+		}
+	}
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acDeleteStream(w http.ResponseWriter, req actionRequest) {
+	p := s.providerOrError(w, req.ProviderId)
+	if p == nil {
+		return
+	}
+	ids := requestedIDs(req)
+	kept := p.Streams[:0]
+	for _, st := range p.Streams {
+		if matchIDs(ids, st.Id) {
+			s.stopChannel(p.Id, st.Id)
+			s.media.drop(p.Id, st.Id)
+			continue
+		}
+		kept = append(kept, st)
+	}
+	p.Streams = kept
+	if err := s.store.Put(p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acRenameChannel(w http.ResponseWriter, req actionRequest) {
+	p := s.providerOrError(w, req.ProviderId)
+	if p == nil {
+		return
+	}
+	ids := requestedIDs(req)
+	name := str(mapGet(req.Raw, "Name"))
+	if name == "" && len(req.Streams) > 0 {
+		name = str(mapGet(req.Streams[0], "Name"))
+	}
+	for i := range p.Streams {
+		if matchIDs(ids, p.Streams[i].Id) {
+			p.Streams[i].Name = name
+			p.Streams[i].Id = config.Slug(name)
+		}
+	}
+	if err := s.store.Put(p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acAddProvider(w http.ResponseWriter, req actionRequest) {
+	name := str(mapGet(req.Raw, "Name"))
+	if name == "" {
+		name = req.ProviderName
+	}
+	if name == "" {
+		name = str(mapGet(req.Provider, "Name"))
+	}
+	if name == "" {
+		http.Error(w, "missing provider name", http.StatusInternalServerError)
+		return
+	}
+	p := &config.Provider{
+		Id:                   config.Slug(name),
+		Name:                 name,
+		RunningMode:          config.RunInternalRemuxer,
+		OutputMode:           config.OutDirectHLS,
+		NetworkScope:         "script,manifest,media",
+		EventsRefreshPeriod:  60,
+		HttpGetRetries:       2,
+		StallDetectTimeout:   20,
+		MaxConcurrentStreams: 10,
+		NbAnnouncedFragments: 6,
+		PlaylistDuration:     30,
+		HlsFragmentsDuration: 2,
+		Streams:              []config.Stream{},
+	}
+	if err := s.store.Put(p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acDeleteProvider(w http.ResponseWriter, req actionRequest) {
+	id := req.ProviderId
+	if id == "" {
+		id = str(mapGet(req.Raw, "Id"))
+	}
+	if id == "" {
+		http.Error(w, "missing provider", http.StatusInternalServerError)
+		return
+	}
+	if p := s.store.Provider(id); p != nil {
+		for i := range p.Streams {
+			s.stopChannel(p.Id, p.Streams[i].Id)
+			s.media.drop(p.Id, p.Streams[i].Id)
+		}
+	}
+	s.mgr.StopProvider(id)
+	if err := s.store.Delete(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acRenameProvider(w http.ResponseWriter, req actionRequest) {
+	p := s.providerOrError(w, req.ProviderId)
+	if p == nil {
+		return
+	}
+	name := str(mapGet(req.Raw, "Name"))
+	if name == "" {
+		return
+	}
+	old := p.Id
+	p.Name = name
+	p.Id = config.Slug(name)
+	if old != p.Id {
+		if err := s.store.Delete(old); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := s.store.Put(p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acUpdateGlobal(w http.ResponseWriter, req actionRequest) {
+	p := s.providerOrError(w, req.ProviderId)
+	if p == nil {
+		return
+	}
+	if v, ok := req.Raw["Bind"]; ok {
+		p.Bind = str(v)
+	}
+	if v, ok := req.Raw["Proxy"]; ok {
+		p.Proxy = str(v)
+	}
+	if v, ok := req.Raw["Doh"]; ok {
+		p.Doh = str(v)
+	}
+	if v, ok := req.Raw["NetworkScope"]; ok {
+		p.NetworkScope = str(v)
+	}
+	if v, ok := req.Raw["UserAgent"]; ok {
+		p.UserAgent = str(v)
+	}
+	if v, ok := req.Raw["RunningMode"]; ok {
+		p.RunningMode = str(v)
+	}
+	if v, ok := req.Raw["OutputMode"]; ok {
+		p.OutputMode = str(v)
+	}
+	if err := s.store.Put(p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.restartRunning(p)
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acMassUpdate(w http.ResponseWriter, req actionRequest) {
+	p := s.providerOrError(w, req.ProviderId)
+	if p == nil {
+		return
+	}
+	ids := requestedIDs(req)
+	field := str(mapGet(req.Raw, "Field"))
+	value := mapGet(req.Raw, "Value")
+	set := req.Action == "massupdateset" || req.Action == "massupdate"
+
+	for i := range p.Streams {
+		if !matchIDs(ids, p.Streams[i].Id) && !(len(ids) == 1 && ids[0] == "all") {
+			continue
+		}
+		if field == "" {
+			continue
+		}
+		applyDynamicField(&p.Streams[i], field, set, value)
+	}
+	if err := s.store.Put(p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acAddUser(w http.ResponseWriter, req actionRequest) {
+	src := req.userPayload()
+	name := str(mapGet(src, "Username"))
+	if name == "" {
+		name = str(mapGet(req.Raw, "Username"))
+	}
+	if name == "" {
+		http.Error(w, "missing username", http.StatusInternalServerError)
+		return
+	}
+	users := s.store.Users()
+	for _, u := range users {
+		if u.Username == name {
+			http.Error(w, "user already exists", http.StatusInternalServerError)
+			return
+		}
+	}
+	users = append(users, config.User{
+		Username:  name,
+		Password:  str(mapGet(src, "Password")),
+		IsAdmin:   boolOf(mapGet(src, "IsAdmin")),
+		WebAccess: boolOf(mapGet(src, "WebAccess")),
+	})
+	s.store.SetUsers(users)
+	if err := s.store.SaveUsers(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acUpdateUser(w http.ResponseWriter, req actionRequest) {
+	src := req.userPayload()
+	name := str(mapGet(src, "Username"))
+	users := s.store.Users()
+	found := false
+	for i := range users {
+		if users[i].Username != name {
+			continue
+		}
+		found = true
+		if v, ok := src["Password"]; ok {
+			users[i].Password = str(v)
+		}
+		if v, ok := src["IsAdmin"]; ok {
+			users[i].IsAdmin = boolOf(v)
+		}
+		if v, ok := src["WebAccess"]; ok {
+			users[i].WebAccess = boolOf(v)
+		}
+		if v, ok := src["Providers"]; ok {
+			users[i].Providers = stringSlice(v)
+		}
+		if v, ok := src["Networks"]; ok {
+			users[i].Networks = stringSlice(v)
+		}
+	}
+	if !found {
+		http.Error(w, "unknown user", http.StatusInternalServerError)
+		return
+	}
+	s.store.SetUsers(users)
+	if err := s.store.SaveUsers(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acDeleteUser(w http.ResponseWriter, req actionRequest) {
+	src := req.userPayload()
+	name := str(mapGet(src, "Username"))
+	if name == "" {
+		name = str(mapGet(req.Raw, "Username"))
+	}
+	users := s.store.Users()
+	kept := users[:0]
+	for _, u := range users {
+		if u.Username != name {
+			kept = append(kept, u)
+		}
+	}
+	s.store.SetUsers(kept)
+	if err := s.store.SaveUsers(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acRenameUser(w http.ResponseWriter, req actionRequest) {
+	old := str(mapGet(req.Raw, "Username"))
+	if v, ok := req.Raw["OldUsername"]; ok {
+		old = str(v)
+	}
+	if old == "" {
+		old = str(mapGet(req.userPayload(), "Username"))
+	}
+	name := str(mapGet(req.Raw, "Name"))
+	if name == "" {
+		name = str(mapGet(req.Raw, "NewUsername"))
+	}
+	if name == "" {
+		name = str(mapGet(req.userPayload(), "Username"))
+	}
+	users := s.store.Users()
+	for i := range users {
+		if users[i].Username == old {
+			users[i].Username = name
+		}
+	}
+	s.store.SetUsers(users)
+	if err := s.store.SaveUsers(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acExport(w http.ResponseWriter, req actionRequest) {
+	p := s.providerOrError(w, req.ProviderId)
+	if p == nil {
+		return
+	}
+	ids := requestedIDs(req)
+	out := providerToMap(p, true)
+	streams := make([]map[string]any, 0)
+	for i := range p.Streams {
+		if matchIDs(ids, p.Streams[i].Id) {
+			streams = append(streams, streamToMap(&p.Streams[i]))
+		}
+	}
+	out["Streams"] = streams
+	s.renderJSON(w, out)
+}
+
+func (s *Server) acImport(w http.ResponseWriter, req actionRequest) {
+	body, ok := req.Raw["Body"].(map[string]any)
+	if !ok {
+		http.Error(w, "invalid import body", http.StatusInternalServerError)
+		return
+	}
+	p := &config.Provider{}
+	raw, _ := json.Marshal(body)
+	if err := json.Unmarshal(raw, p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if name := str(mapGet(req.Raw, "Name")); name != "" {
+		p.Name = name
+		p.Id = config.Slug(name)
+	}
+	if p.Id == "" {
+		p.Id = config.Slug(p.Name)
+	}
+	if err := s.store.Put(p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.mgr.BumpGlobal()
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) providerOrError(w http.ResponseWriter, id string) *config.Provider {
+	if id == "" {
+		p := s.store.DefaultProvider()
+		if p == nil {
+			http.Error(w, "invalid provider", http.StatusInternalServerError)
+			return nil
+		}
+		return p
+	}
+	p := s.store.Provider(id)
+	if p == nil {
+		http.Error(w, "invalid provider", http.StatusInternalServerError)
+		return nil
+	}
+	return p
+}
+
+func requestedIDs(req actionRequest) []string {
+	out := []string{}
+	for _, m := range req.Streams {
+		v := mapGet(m, "Id")
+		switch t := v.(type) {
+		case string:
+			for _, part := range strings.Split(t, ",") {
+				part = strings.TrimSpace(part)
+				if part != "" {
+					out = append(out, part)
+				}
+			}
+		case []any:
+			for _, e := range t {
+				s := str(e)
+				if s != "" {
+					out = append(out, s)
+				}
+			}
+		}
+	}
+	if len(out) == 0 {
+		if v := mapGet(req.Raw, "Streams"); v != nil {
+			out = stringSlice(v)
+		}
+	}
+	return out
+}
+
+func matchIDs(ids []string, id string) bool {
+	if len(ids) == 0 {
+		return true
+	}
+	for _, want := range ids {
+		if want == "all" || want == id {
+			return true
+		}
+	}
+	return false
+}
+
+func streamToMap(st *config.Stream) map[string]any {
+	return map[string]any{
+		"Name":                   st.Name,
+		"Id":                     st.Id,
+		"Mode":                   st.Mode,
+		"IsEvent":                st.IsEvent,
+		"Manifest":               st.Manifest,
+		"ManifestUrl":            st.Manifest,
+		"SessionManifest":        st.SessionManifest,
+		"ManifestScript":         st.ManifestScript,
+		"Headers":                st.Headers,
+		"Video":                  st.Video,
+		"Audio":                  st.Audio,
+		"Subtitles":              st.Subtitles,
+		"VideoList":              st.VideoList,
+		"AudioList":              st.AudioList,
+		"SubtitlesList":          st.SubtitlesList,
+		"Keys":                   st.Keys,
+		"UseCdm":                 st.UseCdm,
+		"CdmType":                st.CdmType,
+		"CdmMode":                st.CdmMode,
+		"Cdm":                    st.Cdm,
+		"PRClientVersion":        st.PRClientVersion,
+		"PRCustomData":           st.PRCustomData,
+		"PRLAVersion":            st.PRLAVersion,
+		"VmxUniqueId":            st.VmxUniqueId,
+		"RunningMode":            st.RunningMode,
+		"OutputMode":             st.OutputMode,
+		"ModeOverride":           st.ModeOverride,
+		"MultiTS":                st.MultiTS,
+		"Autostart":              st.Autostart,
+		"OnDemand":               st.OnDemand,
+		"SpeedUp":                st.SpeedUp,
+		"NetworkOverride":        st.NetworkOverride,
+		"NetworkScope":           st.NetworkScope,
+		"Bind":                   st.Bind,
+		"Proxy":                  st.Proxy,
+		"Doh":                    st.Doh,
+		"RecordEvent":            st.RecordEvent,
+		"IgnoreUpdate":           st.IgnoreUpdate,
+		"FixIvSize":              st.FixIvSize,
+		"TimeRange":              st.TimeRange,
+		"RangeStartTime":         st.RangeStartTime,
+		"RangeEndTime":           st.RangeEndTime,
+		"Start":                  st.Start,
+		"End":                    st.End,
+		"Output":                 st.Output,
+		"PipeOutputParams":       st.PipeOutputParams,
+		"ProtoOutputParams":      st.ProtoOutputParams,
+		"NoRestartOnError":       st.NoRestartOnError,
+		"NoRestartOnTrackChange": st.NoRestartOnTrackChange,
+		"NoWaitFullPlaylist":     st.NoWaitFullPlaylist,
+		"PlaylistDuration":       st.PlaylistDuration,
+		"Running":                st.Running,
+		"Status":                 st.Status,
+		"StatusColor":            st.StatusColor,
+	}
+}
+
+func providerToMap(p *config.Provider, withStreams bool) map[string]any {
+	m := map[string]any{
+		"Id":                        p.Id,
+		"Name":                      p.Name,
+		"RunningMode":               p.EffectiveRunningMode(),
+		"OutputMode":                p.EffectiveOutputMode(),
+		"Bind":                      p.Bind,
+		"Proxy":                     p.Proxy,
+		"Doh":                       p.Doh,
+		"NetworkScope":              p.NetworkScope,
+		"Headers":                   p.Headers,
+		"UserAgent":                 p.UserAgent,
+		"Script":                    p.Script,
+		"VmxUniqueId":               p.VmxUniqueId,
+		"XForwardedFor":             p.XForwardedFor,
+		"AlwaysResetSession":        p.AlwaysResetSession,
+		"PipeOutputCmdFormated":     p.PipeOutputCmdFormated,
+		"AutorestartPeriod":         p.AutorestartPeriod,
+		"RandomAutostartPeriod":     p.RandomAutostartPeriod,
+		"SequencialAutostartPeriod": p.SequencialAutostartPeriod,
+		"RestartDelay":              p.RestartDelay,
+		"RestartFinished":           p.RestartFinished,
+		"PlaylistDuration":          p.PlaylistDuration,
+		"HlsFragmentsDuration":      p.HlsFragmentsDuration,
+		"NbAnnouncedFragments":      p.NbAnnouncedFragments,
+		"PlaybackDelay":             p.PlaybackDelay,
+		"ContinuousPlayback":        p.ContinuousPlayback,
+		"NoWaitFullPlaylist":        p.NoWaitFullPlaylist,
+		"IgnoreStaticDash":          p.IgnoreStaticDash,
+		"UseDashDelay":              p.UseDashDelay,
+		"HttpGetRetries":            p.HttpGetRetries,
+		"StallDetectTimeout":        p.StallDetectTimeout,
+		"MaxConcurrentStreams":      p.MaxConcurrentStreams,
+		"NoRestartOnError":          p.NoRestartOnError,
+		"NoRestartOnTrackChange":    p.NoRestartOnTrackChange,
+		"EventsAutorefresh":         p.EventsAutorefresh,
+		"EventsAutoremove":          p.EventsAutoremove,
+		"EventsRefreshPeriod":       p.EventsRefreshPeriod,
+		"ChannelsAutoremove":        p.ChannelsAutoremove,
+		"ReuseEventIndex":           p.ReuseEventIndex,
+		"EpgTimezone":               p.EpgTimezone,
+	}
+	if withStreams {
+		list := make([]map[string]any, 0, len(p.Streams))
+		for i := range p.Streams {
+			list = append(list, streamToMap(&p.Streams[i]))
+		}
+		m["Streams"] = list
+	}
+	return m
+}
+
+func applyStreamPayload(st *config.Stream, m map[string]any) {
+	if v, ok := m["Name"]; ok {
+		st.Name = str(v)
+	}
+	if v, ok := m["ManifestUrl"]; ok {
+		st.Manifest = str(v)
+	}
+	if v, ok := m["Manifest"]; ok && st.Manifest == "" {
+		st.Manifest = str(v)
+	}
+	if v, ok := m["Mode"]; ok {
+		st.Mode = str(v)
+	}
+	if v, ok := m["ManifestScript"]; ok {
+		st.ManifestScript = str(v)
+	}
+	if v, ok := m["RunningMode"]; ok {
+		st.RunningMode = str(v)
+	}
+	if v, ok := m["OutputMode"]; ok {
+		st.OutputMode = str(v)
+	}
+	if v, ok := m["VStreamId"]; ok {
+		st.Video = str(v)
+	}
+	if v, ok := m["AStreamId"]; ok {
+		st.Audio = str(v)
+	}
+	if v, ok := m["SStreamId"]; ok {
+		st.Subtitles = str(v)
+	}
+	if v, ok := m["CdmType"]; ok {
+		st.CdmType = str(v)
+	}
+	if v, ok := m["CdmMode"]; ok {
+		st.CdmMode = str(v)
+	}
+	if v, ok := m["Cdm"]; ok {
+		st.Cdm = str(v)
+	}
+	if v, ok := m["PRLAVersion"]; ok {
+		st.PRLAVersion = str(v)
+	}
+	if v, ok := m["PRClientVersion"]; ok {
+		st.PRClientVersion = str(v)
+	}
+	if v, ok := m["PRCustomData"]; ok {
+		st.PRCustomData = str(v)
+	}
+	if v, ok := m["Keys"]; ok {
+		st.Keys = splitLines(str(v))
+	}
+	if v, ok := m["PipeOutputParams"]; ok {
+		st.PipeOutputParams = str(v)
+	}
+	if v, ok := m["ProtoOutputParams"]; ok {
+		st.ProtoOutputParams = str(v)
+	}
+	if v, ok := m["Bind"]; ok {
+		st.Bind = str(v)
+	}
+	if v, ok := m["Proxy"]; ok {
+		st.Proxy = str(v)
+	}
+	if v, ok := m["Doh"]; ok {
+		st.Doh = str(v)
+	}
+	if v, ok := m["NetworkScope"]; ok {
+		st.NetworkScope = str(v)
+	}
+	if v, ok := m["Start"]; ok {
+		st.RangeStartTime = str(v)
+	}
+	if v, ok := m["End"]; ok {
+		st.RangeEndTime = str(v)
+	}
+	if v, ok := m["Output"]; ok {
+		st.Output = str(v)
+	}
+
+	for _, f := range []struct {
+		key string
+		dst *bool
+	}{
+		{"OnDemand", &st.OnDemand},
+		{"Autostart", &st.Autostart},
+		{"SessionManifest", &st.SessionManifest},
+		{"SpeedUp", &st.SpeedUp},
+		{"UseCdm", &st.UseCdm},
+		{"NetworkOverride", &st.NetworkOverride},
+		{"ModeOverride", &st.ModeOverride},
+		{"RecordEvent", &st.RecordEvent},
+		{"IgnoreUpdate", &st.IgnoreUpdate},
+		{"FixIvSize", &st.FixIvSize},
+		{"TimeRange", &st.TimeRange},
+		{"MultiTS", &st.MultiTS},
+		{"NoRestartOnError", &st.NoRestartOnError},
+		{"NoRestartOnTrackChange", &st.NoRestartOnTrackChange},
+		{"NoWaitFullPlaylist", &st.NoWaitFullPlaylist},
+	} {
+		if v, ok := m[f.key]; ok {
+			*f.dst = boolOf(v)
+		}
+	}
+}
+
+func applyDynamicField(st *config.Stream, field string, set bool, value any) {
+	switch field {
+	case "Autostart", "autostart":
+		st.Autostart = set
+	case "OnDemand", "ondemand":
+		st.OnDemand = set
+	case "SpeedUp", "speedup":
+		st.SpeedUp = set
+	case "RecordEvent", "recordevent":
+		st.RecordEvent = set
+	case "NetworkOverride", "network":
+		st.NetworkOverride = set
+	case "IgnoreUpdate", "ignoreupdate":
+		st.IgnoreUpdate = set
+	case "FixIvSize", "fixivsize":
+		st.FixIvSize = set
+	case "TimeRange", "timerange":
+		st.TimeRange = set
+	case "UseCdm", "usecdm":
+		st.UseCdm = set
+	case "RunningMode":
+		if set {
+			st.RunningMode = str(value)
+		}
+	case "OutputMode":
+		if set {
+			st.OutputMode = str(value)
+		}
+	case "Mode":
+		if set {
+			st.Mode = str(value)
+		}
+	}
+}
+
+func mapGet(m map[string]any, key string) any {
+	if m == nil {
+		return nil
+	}
+	if v, ok := m[key]; ok {
+		return v
+	}
+	for k, v := range m {
+		if strings.EqualFold(k, key) {
+			return v
+		}
+	}
+	return nil
+}
+
+func str(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return t
+	case json.Number:
+		return t.String()
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	case bool:
+		if t {
+			return "true"
+		}
+		return "false"
+	case []any:
+		parts := make([]string, 0, len(t))
+		for _, e := range t {
+			parts = append(parts, str(e))
+		}
+		return strings.Join(parts, ",")
+	default:
+		return fmt.Sprint(t)
+	}
+}
+
+func boolOf(v any) bool {
+	switch t := v.(type) {
+	case nil:
+		return false
+	case bool:
+		return t
+	case string:
+		return t == "true" || t == "1" || t == "on"
+	case json.Number:
+		return t.String() != "0"
+	case float64:
+		return t != 0
+	default:
+		return false
+	}
+}
+
+func stringSlice(v any) []string {
+	switch t := v.(type) {
+	case nil:
+		return nil
+	case []string:
+		return t
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			s := str(e)
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		return splitLines(t)
+	default:
+		return nil
+	}
+}
+
+func splitLines(s string) []string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	parts := strings.Split(s, "\n")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	sort.Strings(out)
+	return out
+}

@@ -1,0 +1,41 @@
+{
+	"Id": "example",
+	"Name": "example",
+	"RunningMode": "internalremuxer",
+	"OutputMode": "directhls",
+	"Bind": "",
+	"Proxy": "",
+	"Doh": "",
+	"NetworkScope": "script,manifest,media",
+	"Headers": [],
+	"UserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+	"HttpGetRetries": 2,
+	"StallDetectTimeout": 20,
+	"RestartDelay": 5,
+	"PlaylistDuration": 30,
+	"NbAnnouncedFragments": 6,
+	"NoRestartOnError": false,
+	"Streams": [
+		{
+			"Name": "channel1",
+			"Id": "channel1",
+			"Mode": "live",
+			"Manifest": "https://example.com/live/manifest.mpd",
+			"Video": "all",
+			"Audio": "all",
+			"Keys": [
+				"0123456789abcdef0123456789abcdef:0123456789abcdef0123456789abcdef"
+			],
+			"RunningMode": "internalremuxer",
+			"OutputMode": "directhls",
+			"Autostart": false,
+			"OnDemand": false,
+			"NetworkOverride": false,
+			"FixIvSize": false,
+			"NoRestartOnError": false,
+			"VideoList": [],
+			"AudioList": [],
+			"SubtitlesList": []
+		}
+	]
+}

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+	{{template "headers.html" .}}
+	<body>
+		{{template "menu.html" .}}
+
+		<div style="margin-top: -120px; margin-left: 20px; margin-right: 20px;">
+			<div class="input-group mb-3" style="width: 720px;">
+				<span class="input-group-text">NEW USER</span>
+				<input type="text" class="form-control" id="addUserText" placeholder="username"/>
+				<input type="password" class="form-control" id="addUserPassword" placeholder="password"/>
+				<button class="btn btn-primary" id="addUserButton" onclick="dsAddUser()">ADD</button>
+			</div>
+
+			<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="usersTable">
+				<thead>
+					<TR>
+						<TH style="text-align:center;">Username</TH>
+						<TH style="text-align:center;">Is admin</TH>
+						<TH style="text-align:center;">Web access</TH>
+						<TH style="text-align:center;">Actions</TH>
+					</TR>
+				</thead>
+				<tbody>
+					{{range .Users}}
+					<TR>
+						<TD style="text-align:center;">{{ .Username }}</TD>
+						<TD style="text-align:center;">{{ .IsAdmin }}</TD>
+						<TD style="text-align:center;">{{ .WebAccess }}</TD>
+						<TD style="text-align:center;">
+							<button class="btn btn-secondary btn-sm" onclick="dsRenameUser('{{ .Username }}')">RENAME</button>
+							<button class="btn btn-danger btn-sm" onclick="dsDeleteUser('{{ .Username }}')">DELETE</button>
+						</TD>
+					</TR>
+					{{else}}
+					<TR><TD colspan="4" style="text-align:center;">no users</TD></TR>
+					{{end}}
+				</tbody>
+			</table>
+		</div>
+
+		<script type="text/javascript">
+			document.getElementById('usersbutton').style.backgroundColor = 'darkblue';
+
+			async function dsPost(body) {
+				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(body)
+				});
+				if (!response.ok) { showStatusWindow(await response.text()); return false; }
+				return true;
+			}
+
+			async function dsAddUser() {
+				var name = document.getElementById('addUserText').value;
+				var pass = document.getElementById('addUserPassword').value;
+				if (!name) { return; }
+				if (await dsPost({ Action: 'adduser', User: { Username: name, Password: pass, WebAccess: true } })) {
+					location.reload();
+				}
+			}
+
+			async function dsDeleteUser(name) {
+				if (!confirm('Delete user ' + name + '?')) { return; }
+				if (await dsPost({ Action: 'deleteuser', User: { Username: name } })) {
+					location.reload();
+				}
+			}
+
+			async function dsRenameUser(name) {
+				var next = prompt('New user name', name);
+				if (!next || next === name) { return; }
+				if (await dsPost({ Action: 'renameuser', OldUsername: name, Name: next })) {
+					location.reload();
+				}
+			}
+		</script>
+	</body>
+</html>

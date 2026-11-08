@@ -1,0 +1,462 @@
+﻿<!DOCTYPE html>
+<html>
+	{{template "headers.html" .}}
+	<body>
+		{{template "menu.html" .}}
+
+		<div style="margin-top: -120px; margin-left: 20px; margin-right: 20px;">
+
+			<div class="input-group mb-3" style="width: 520px;">
+				<span class="input-group-text">PROVIDER</span>
+				<select class="form-select" id="providerSelection">
+					{{range .Providers}}
+					<option value="{{ .Id }}" {{selected .Id $.ProviderId}}>{{ .Name }}</option>
+					{{end}}
+				</select>
+				<input type="text" class="form-control" id="addProviderText" placeholder="new provider name"/>
+				<button class="btn btn-primary" id="addProviderButton" onclick="addProviderFormSubmit(event)">ADD</button>
+				<button class="btn btn-danger" id="deleteProviderButton" onclick="deleteProviderClick(event)">DEL</button>
+				<button class="btn btn-secondary" id="exportProviderButton" onclick="exportProviderClick(event)">EXPORT</button>
+				<button class="btn btn-secondary" id="importProviderButton" onclick="importProviderClick(event)">IMPORT</button>
+			</div>
+
+			<div class="card mb-3">
+				<div class="card-header">Global settings</div>
+				<div class="card-body">
+					<div class="row g-2">
+						<div class="col-md-3">
+							<label class="form-label">Running mode</label>
+							<select class="form-select" id="runningmode">
+								{{range .RunningModes}}<option value="{{ . }}">{{ . }}</option>{{end}}
+							</select>
+						</div>
+						<div class="col-md-3" id="outputmodediv">
+							<label class="form-label">Output mode</label>
+							<select class="form-select" id="outputmode">
+								{{range .OutputModes}}<option value="{{ . }}">{{ . }}</option>{{end}}
+							</select>
+						</div>
+						<div class="col-md-3">
+							<label class="form-label">User-Agent</label>
+							<input type="text" class="form-control" id="useragent"/>
+						</div>
+						<div class="col-md-3">
+							<label class="form-label">Script</label>
+							<input type="text" class="form-control" id="script"/>
+						</div>
+						<div class="col-md-3">
+							<label class="form-label">VMX unique id</label>
+							<input type="text" class="form-control" id="vmxuniqueid"/>
+						</div>
+						<div class="col-md-3">
+							<label class="form-label">Bind</label>
+							<input type="text" class="form-control" id="bind"/>
+						</div>
+						<div class="col-md-3">
+							<label class="form-label">Proxy</label>
+							<input type="text" class="form-control" id="proxy"/>
+						</div>
+						<div class="col-md-3">
+							<label class="form-label">DoH</label>
+							<input type="text" class="form-control" id="doh"/>
+						</div>
+						<div class="col-md-3">
+							<label class="form-label">Network scope</label>
+							<input type="text" class="form-control" id="networkscope"/>
+						</div>
+						<div class="col-md-9">
+							<label class="form-label">Headers (one per line)</label>
+							<textarea class="form-control" rows="3" id="headers"></textarea>
+						</div>
+						<div class="col-md-12">
+							<div class="form-check form-switch">
+								<input class="form-check-input" type="checkbox" id="xforwardedfor"/>
+								<label class="form-check-label" for="xforwardedfor">X-Forwarded-For passthrough</label>
+							</div>
+							<div class="form-check form-switch">
+								<input class="form-check-input" type="checkbox" id="alwaysresetsession"/>
+								<label class="form-check-label" for="alwaysresetsession">Always reset session</label>
+							</div>
+						</div>
+					</div>
+					<button class="btn btn-primary mt-3" id="applyglobalnetwork" onclick="applyGlobalNetworkClick(event)">APPLY NETWORK</button>
+				</div>
+			</div>
+
+			<div class="card mb-3">
+				<div class="card-header">Behaviour</div>
+				<div class="card-body">
+					<div class="row g-2">
+						<div class="col-md-2"><label class="form-label">Autorestart period</label><input type="number" class="form-control" id="autorestartperiod"/></div>
+						<div class="col-md-2"><label class="form-label">Random autostart</label><input type="number" class="form-control" id="randomautostartperiod"/></div>
+						<div class="col-md-2"><label class="form-label">Sequencial autostart</label><input type="number" class="form-control" id="sequencialautostartperdiod"/></div>
+						<div class="col-md-2"><label class="form-label">Restart delay</label><input type="number" class="form-control" id="restartdelay"/></div>
+						<div class="col-md-2"><label class="form-label">Playlist duration</label><input type="number" class="form-control" id="playlistduraion"/></div>
+						<div class="col-md-2"><label class="form-label">HLS fragments duration</label><input type="number" class="form-control" id="hlsfragmentsduration"/></div>
+						<div class="col-md-2"><label class="form-label">Nb announced fragments</label><input type="number" class="form-control" id="nbannouncedfragments"/></div>
+						<div class="col-md-2"><label class="form-label">Playback delay</label><input type="number" class="form-control" id="playbackdelay"/></div>
+						<div class="col-md-2"><label class="form-label">HTTP get retries</label><input type="number" class="form-control" id="httpgetretries"/></div>
+						<div class="col-md-2"><label class="form-label">Stall detect timeout</label><input type="number" class="form-control" id="stalldetecttimeout"/></div>
+						<div class="col-md-2"><label class="form-label">Max concurrent streams</label><input type="number" class="form-control" id="maxconcurrentstreams"/></div>
+						<div class="col-md-2"><label class="form-label">EPG timezone</label><input type="text" class="form-control" id="epgtimezone"/></div>
+						<div class="col-md-4"><label class="form-label">Pipe output command</label><input type="text" class="form-control" id="pipeoutputcmdformated"/></div>
+						<div class="col-md-4"><label class="form-label">Events refresh period</label><input type="number" class="form-control" id="eventsrefreshperiod"/></div>
+						<div class="col-md-4">
+							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="restartfinished"/><label class="form-check-label" for="restartfinished">Restart finished</label></div>
+							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="continuousplayback"/><label class="form-check-label" for="continuousplayback">Continuous playback</label></div>
+							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="nowaitfullplaylist"/><label class="form-check-label" for="nowaitfullplaylist">No wait full playlist</label></div>
+							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="ignorestaticdash"/><label class="form-check-label" for="ignorestaticdash">Ignore static DASH</label></div>
+							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="usedashdelay"/><label class="form-check-label" for="usedashdelay">Use DASH delay</label></div>
+							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="norestartonerror"/><label class="form-check-label" for="norestartonerror">No restart on error</label></div>
+							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="norestartontrackchange"/><label class="form-check-label" for="norestartontrackchange">No restart on track change</label></div>
+							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="eventsautorefresh"/><label class="form-check-label" for="eventsautorefresh">Events autorefresh</label></div>
+							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="eventsautoremove"/><label class="form-check-label" for="eventsautoremove">Events autoremove</label></div>
+							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="channelsautoremove"/><label class="form-check-label" for="channelsautoremove">Channels autoremove</label></div>
+							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="reuseeventindex"/><label class="form-check-label" for="reuseeventindex">Reuse event index</label></div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="input-group mb-3" style="width: 520px;">
+				<span class="input-group-text">NEW STREAM</span>
+				<input type="text" class="form-control" id="addText" placeholder="stream name"/>
+				<button class="btn btn-primary" id="addStreamButton" onclick="addStreamFormSubmit(event)">ADD</button>
+			</div>
+
+			<div class="input-group mb-3" style="width: 720px;">
+				<span class="input-group-text">MASS UPDATE</span>
+				<select class="form-select" id="massupdateselection">
+					<option value="all">All</option>
+					<option value="selected">Selected</option>
+					<option value="visible">Visible</option>
+					<option value="page">Page</option>
+				</select>
+				<select class="form-select" id="massupdateparams">
+					<option value="Autostart">Autostart</option>
+					<option value="OnDemand">OnDemand</option>
+					<option value="SpeedUp">SpeedUp</option>
+					<option value="RecordEvent">RecordEvent</option>
+					<option value="NetworkOverride">NetworkOverride</option>
+					<option value="IgnoreUpdate">IgnoreUpdate</option>
+					<option value="FixIvSize">FixIvSize</option>
+					<option value="TimeRange">TimeRange</option>
+					<option value="UseCdm">UseCdm</option>
+				</select>
+				<button class="btn btn-primary" id="massUpdateSet" onclick="massupdateClick(event)">SET</button>
+				<button class="btn btn-secondary" id="massUpdateUnset" onclick="massupdateClick(event)">UNSET</button>
+				<div class="form-check form-switch ms-3 mt-2"><input class="form-check-input" type="checkbox" id="checkall" onchange="checkallChange(event)"/><label class="form-check-label" for="checkall">All</label></div>
+			</div>
+
+			{{range .Streams}}
+			{{ $n := printf "_%s_%s" $.ProviderId .Id }}
+			{{ $st := . }}
+			<div class="card mb-3" style="border-width: 3px;">
+				<div class="card-header" style="display:flex; align-items:center;">
+					<input class="form-check-input me-2" type="checkbox" id="checked{{ $n }}"/>
+					<img id="qualitylogo{{ $n }}" width="20" class="me-2"/>
+					<a id="name{{ $n }}" class="btn btn-outline-primary me-2">{{ .Name }}</a>
+					<button class="btn btn-primary btn-sm me-1" id="startStop{{ $n }}">START</button>
+					<button class="btn btn-secondary btn-sm me-1" id="refresh{{ $n }}">REFRESH</button>
+					<button class="btn btn-secondary btn-sm me-1" id="refreshkeys{{ $n }}">REFRESH KEYS</button>
+					<button class="btn btn-danger btn-sm" id="flushkeys{{ $n }}">FLUSH KEYS</button>
+					<div hidden id="statusfull{{ $n }}"></div>
+					<pre class="ms-auto mb-0" style="white-space: pre-wrap;" id="status{{ $n }}"></pre>
+					<pre class="ms-2 mb-0" style="white-space: pre-wrap;" id="streamerrors{{ $n }}"></pre>
+				</div>
+				<div class="card-body">
+					<div class="row g-2">
+						<div class="col-md-8">
+							<label class="form-label">Manifest URL</label>
+							<input type="text" class="form-control" id="manifestUrl{{ $n }}" value="{{ .Manifest }}"/>
+						</div>
+						<div class="col-md-2">
+							<label class="form-label">Mode</label>
+							<select class="form-select" id="mode{{ $n }}">
+								{{range $.ModeNames}}<option value="{{ . }}" {{selected . $st.Mode}}>{{ . }}</option>{{end}}
+							</select>
+						</div>
+						<div class="col-md-2">
+							<label class="form-label">Manifest script</label>
+							<input type="text" class="form-control" id="manifestscript{{ $n }}" value="{{ .ManifestScript }}"/>
+						</div>
+
+						<div class="col-md-3" id="vStreamIdDiv{{ $n }}">
+							<label class="form-label">Video</label>
+							<select class="form-select" id="vStreamId{{ $n }}">
+								<option value="all">all</option>
+								{{range .VideoList}}<option value="{{ .Id }}" {{selected .Id $st.Video}}>{{ .Desc }}</option>{{end}}
+							</select>
+						</div>
+						<div class="col-md-3" id="aStreamIdDiv{{ $n }}">
+							<label class="form-label">Audio</label>
+							<select class="form-select" id="aStreamId{{ $n }}" multiple>
+								<option value="all">all</option>
+								<option value="none">none</option>
+								{{range .AudioList}}<option value="{{ .Id }}" {{selected .Id $st.Audio}}>{{ .Desc }}</option>{{end}}
+							</select>
+						</div>
+						<div class="col-md-3" id="sStreamIdDiv{{ $n }}">
+							<label class="form-label">Subtitles</label>
+							<select class="form-select" id="sStreamId{{ $n }}" multiple>
+								<option value="all">all</option>
+								{{range .SubtitlesList}}<option value="{{ .Id }}" {{selected .Id $st.Subtitles}}>{{ .Desc }}</option>{{end}}
+							</select>
+						</div>
+						<div class="col-md-3">
+							<label class="form-label">Keys (kid:key per line)</label>
+							<textarea class="form-control" rows="2" id="keys{{ $n }}">{{ keysText .Keys }}</textarea>
+						</div>
+
+						<div class="col-md-2">
+							<label class="form-label">Running mode</label>
+							<select class="form-select" id="runningmode{{ $n }}">
+								{{range $.RunningModes}}<option value="{{ . }}" {{selected . $st.RunningMode}}>{{ . }}</option>{{end}}
+							</select>
+						</div>
+						<div class="col-md-2">
+							<label class="form-label">Output mode</label>
+							<select class="form-select" id="outputmode{{ $n }}">
+								{{range $.OutputModes}}<option value="{{ . }}" {{selected . $st.OutputMode}}>{{ . }}</option>{{end}}
+							</select>
+						</div>
+						<div class="col-md-2">
+							<label class="form-label">CDM type</label>
+							<select class="form-select" id="cdmtype{{ $n }}">
+								{{range $.CdmTypes}}<option value="{{ . }}" {{selected . $st.CdmType}}>{{ . }}</option>{{end}}
+							</select>
+						</div>
+						<div class="col-md-2">
+							<label class="form-label">CDM mode</label>
+							<select class="form-select" id="cdmmode{{ $n }}">
+								<option value="internal" {{selected "internal" .CdmMode}}>internal</option>
+								<option value="external" {{selected "external" .CdmMode}}>external</option>
+							</select>
+						</div>
+						<div class="col-md-4" id="cdmdiv{{ $n }}">
+							<label class="form-label">CDM</label>
+							<input type="text" class="form-control" id="cdm{{ $n }}" value="{{ .Cdm }}"/>
+						</div>
+
+						<div class="col-md-3"><label class="form-label">PlayReady LA version</label><input type="text" class="form-control" id="prlaversion{{ $n }}" value="{{ .PRLAVersion }}"/></div>
+						<div class="col-md-3"><label class="form-label">PlayReady client version</label><input type="text" class="form-control" id="prclientversion{{ $n }}" value="{{ .PRClientVersion }}"/></div>
+						<div class="col-md-3"><label class="form-label">PlayReady custom data</label><input type="text" class="form-control" id="prcustomdata{{ $n }}" value="{{ .PRCustomData }}"/></div>
+						<div class="col-md-3"><label class="form-label">Pipe output params</label><input type="text" class="form-control" id="pipeoutputparams{{ $n }}" value="{{ .PipeOutputParams }}"/></div>
+						<div class="col-md-3"><label class="form-label">Proto output params</label><input type="text" class="form-control" id="protooutputparams{{ $n }}" value="{{ .ProtoOutputParams }}"/></div>
+
+						<div class="col-md-2"><label class="form-label">Bind</label><input type="text" class="form-control" id="bind{{ $n }}" value="{{ .Bind }}"/></div>
+						<div class="col-md-2"><label class="form-label">Proxy</label><input type="text" class="form-control" id="proxy{{ $n }}" value="{{ .Proxy }}"/></div>
+						<div class="col-md-2"><label class="form-label">DoH</label><input type="text" class="form-control" id="doh{{ $n }}" value="{{ .Doh }}"/></div>
+						<div class="col-md-3"><label class="form-label">Network scope</label><input type="text" class="form-control" id="networkscope{{ $n }}" value="{{ .NetworkScope }}"/></div>
+						<div class="col-md-3">
+							<label class="form-label">Headers</label>
+							<button class="btn btn-secondary btn-sm w-100" id="showheaders{{ $n }}" onclick="showHideHeaders(event)">SHOW</button>
+						</div>
+						<div class="col-md-6" id="headersDiv{{ $n }}" style="display:none;">
+							<label class="form-label">Manifest headers</label>
+							<textarea class="form-control" rows="2" id="headersmanifest{{ $n }}"></textarea>
+							<label class="form-label mt-2">Media headers</label>
+							<textarea class="form-control" rows="2" id="headersmedia{{ $n }}"></textarea>
+						</div>
+
+						<div class="col-md-3"><label class="form-label">Range start date</label><input type="date" class="form-control" id="rangeStartDate{{ $n }}"/></div>
+						<div class="col-md-3"><label class="form-label">Range start time</label><input type="time" class="form-control" id="rangeStartTime{{ $n }}" value="{{ default "00:00" .RangeStartTime }}"/></div>
+						<div class="col-md-3"><label class="form-label">Range end date</label><input type="date" class="form-control" id="rangeEndDate{{ $n }}"/></div>
+						<div class="col-md-3"><label class="form-label">Range end time</label><input type="time" class="form-control" id="rangeEndTime{{ $n }}" value="{{ default "00:00" .RangeEndTime }}"/></div>
+
+						<div class="col-md-12">
+							<div class="row g-2 mt-2">
+								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="autostart{{ $n }}" {{checked .Autostart}}/><label class="form-check-label">Autostart</label></div></div>
+								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="ondemand{{ $n }}" {{checked .OnDemand}}/><label class="form-check-label">OnDemand</label></div></div>
+								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="speedup{{ $n }}" {{checked .SpeedUp}}/><label class="form-check-label">SpeedUp</label></div></div>
+								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="usecdm{{ $n }}" {{checked .UseCdm}}/><label class="form-check-label">Use CDM</label></div></div>
+								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="network{{ $n }}" {{checked .NetworkOverride}}/><label class="form-check-label">Network override</label></div></div>
+								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="modeoverride{{ $n }}" {{checked .ModeOverride}}/><label class="form-check-label">Mode override</label></div></div>
+								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="recordevent{{ $n }}" {{checked .RecordEvent}}/><label class="form-check-label">Record event</label></div></div>
+								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="ignoreupdate{{ $n }}" {{checked .IgnoreUpdate}}/><label class="form-check-label">Ignore update</label></div></div>
+								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="fixivsize{{ $n }}" {{checked .FixIvSize}}/><label class="form-check-label">Fix IV size</label></div></div>
+								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="timerange{{ $n }}" {{checked .TimeRange}}/><label class="form-check-label">Time range</label></div></div>
+								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="sessionmanifest{{ $n }}" {{checked .SessionManifest}}/><label class="form-check-label">Session manifest</label></div></div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			{{end}}
+
+			<div class="mb-5">
+				<button class="btn btn-success btn-lg" id="saveall" onclick="saveClick(event)">SAVE ALL</button>
+				<button class="btn btn-primary btn-lg" id="saveprovider" onclick="saveClick(event)">SAVE PROVIDER</button>
+			</div>
+		</div>
+
+		<script type="text/javascript">
+			var hls;
+			var streamsPrevParams = new Map();
+			var intervalId = null;
+			var PChangeCounter = new Object();
+			var GlobalChangeCounter = -2;
+
+			initPlayer();
+			document.getElementById('configbutton').style.backgroundColor = 'darkblue';
+
+			document.getElementById('providerSelection').onchange = refreshConfigWithProvider;
+
+			var url = new URL(window.location.href);
+			let params = new URLSearchParams(url.search);
+			var search = params.get('search');
+			if (search) {
+				var box = document.getElementById('name_{{ .ProviderId }}_' + search);
+				if (box) { box.scrollIntoView(); }
+			}
+
+			function fillGlobal(c) {
+				function setv(id, v) { var e = document.getElementById(id); if (e) { e.value = (v === undefined || v === null) ? '' : v; } }
+				function setc(id, v) { var e = document.getElementById(id); if (e) { e.checked = !!v; } }
+				setv('runningmode', c.RunningMode);
+				setv('outputmode', c.OutputMode);
+				setv('useragent', c.UserAgent);
+				setv('script', c.Script);
+				setv('vmxuniqueid', c.VmxUniqueId);
+				setc('xforwardedfor', c.XForwardedFor);
+				setv('bind', c.Bind);
+				setv('proxy', c.Proxy);
+				setv('doh', c.Doh);
+				setv('networkscope', c.NetworkScope);
+				var h = document.getElementById('headers');
+				if (h) {
+					h.value = '';
+					if (c.Headers) { for (var i = 0; i < c.Headers.length; i++) { h.value += c.Headers[i] + '\n'; } }
+				}
+				setc('alwaysresetsession', c.AlwaysResetSession);
+				setv('autorestartperiod', c.AutorestartPeriod);
+				setv('randomautostartperiod', c.RandomAutostartPeriod);
+				setv('sequencialautostartperdiod', c.SequencialAutostartPeriod);
+				setv('restartdelay', c.RestartDelay);
+				setc('restartfinished', c.RestartFinished);
+				setv('playlistduraion', c.PlaylistDuration);
+				setv('hlsfragmentsduration', c.HlsFragmentsDuration);
+				setv('nbannouncedfragments', c.NbAnnouncedFragments);
+				setv('playbackdelay', c.PlaybackDelay);
+				setc('continuousplayback', c.ContinuousPlayback);
+				setc('nowaitfullplaylist', c.NoWaitFullPlaylist);
+				setc('ignorestaticdash', c.IgnoreStaticDash);
+				setc('usedashdelay', c.UseDashDelay);
+				setv('httpgetretries', c.HttpGetRetries);
+				setv('stalldetecttimeout', c.StallDetectTimeout);
+				setv('maxconcurrentstreams', c.MaxConcurrentStreams);
+				setc('norestartonerror', c.NoRestartOnError);
+				setc('norestartontrackchange', c.NoRestartOnTrackChange);
+				setc('eventsautorefresh', c.EventsAutorefresh);
+				setc('eventsautoremove', c.EventsAutoremove);
+				setv('eventsrefreshperiod', c.EventsRefreshPeriod);
+				setc('channelsautoremove', c.ChannelsAutoremove);
+				setc('reuseeventindex', c.ReuseEventIndex);
+				setv('epgtimezone', c.EpgTimezone);
+				setv('pipeoutputcmdformated', c.PipeOutputCmdFormated);
+			}
+
+			async function populateConfig() {
+				var pid = document.getElementById('providerSelection').value;
+				if (!pid) { return; }
+				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ Action: 'getconf', ProviderId: pid, Streams: [ { Id: 'all' } ] })
+				});
+				if (!response.ok) { return; }
+				let text = await response.text();
+				if (!text) { return; }
+				let conf = JSON.parse(text);
+				fillGlobal(conf);
+				if (conf.Streams) {
+					conf.Streams.forEach(function (s) { populateStream(s); });
+				}
+			}
+
+			async function drmsonicSave() {
+				var pid = document.getElementById('providerSelection').value;
+				await fetch(document.getElementById('baseUrl').value + 'api/action', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ Action: 'save', ProviderId: pid })
+				});
+				showStatusWindow('saved');
+			}
+
+			async function drmsonicAddStream() {
+				var name = document.getElementById('addText').value;
+				if (!name) { return; }
+				var pid = document.getElementById('providerSelection').value;
+				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ Action: 'addchannel', ProviderId: pid, Name: name })
+				});
+				if (!response.ok) { showStatusWindow(await response.text()); return; }
+				location.reload();
+			}
+
+			async function drmsonicAddProvider() {
+				var name = document.getElementById('addProviderText').value;
+				if (!name) { return; }
+				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ Action: 'addprovider', Name: name })
+				});
+				if (!response.ok) { showStatusWindow(await response.text()); return; }
+				location.reload();
+			}
+
+			async function drmsonicDeleteProvider() {
+				var pid = document.getElementById('providerSelection').value;
+				if (!pid || !confirm('Delete provider ' + pid + '?')) { return; }
+				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ Action: 'deleteprovider', ProviderId: pid })
+				});
+				if (!response.ok) { showStatusWindow(await response.text()); return; }
+				location.href = 'providers';
+			}
+
+			var globalMap = {
+				runningmode: 'RunningMode',
+				outputmode: 'OutputMode',
+				useragent: 'UserAgent',
+				script: 'Script',
+				vmxuniqueid: 'VmxUniqueId',
+				bind: 'Bind',
+				proxy: 'Proxy',
+				doh: 'Doh',
+				networkscope: 'NetworkScope'
+			};
+
+			async function drmsonicGlobal(id) {
+				var pid = document.getElementById('providerSelection').value;
+				var body = { Action: 'updateglobal', ProviderId: pid };
+				body[globalMap[id]] = document.getElementById(id).value;
+				await fetch(document.getElementById('baseUrl').value + 'api/action', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(body)
+				});
+			}
+
+			Object.keys(globalMap).forEach(function (id) {
+				var e = document.getElementById(id);
+				if (e) { e.onchange = function () { drmsonicGlobal(id); }; }
+			});
+
+			document.getElementById('addProviderButton').onclick = function (e) { e.preventDefault(); drmsonicAddProvider(); };
+			document.getElementById('deleteProviderButton').onclick = function (e) { e.preventDefault(); drmsonicDeleteProvider(); };
+			document.getElementById('addStreamButton').onclick = function (e) { e.preventDefault(); drmsonicAddStream(); };
+			document.getElementById('saveall').onclick = function (e) { e.preventDefault(); drmsonicSave(); };
+			document.getElementById('saveprovider').onclick = function (e) { e.preventDefault(); drmsonicSave(); };
+
+			populateConfig();
+			intervalId = setInterval(populateConfig, 3000);
+		</script>
+	</body>
+</html>

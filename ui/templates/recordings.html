@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+	{{template "headers.html" .}}
+	<body>
+		{{template "menu.html" .}}
+
+		<div style="margin-top: -120px; margin-left: 20px; margin-right: 20px;">
+			<div id="recActionStatus" class="mb-3"></div>
+
+			<div class="card mb-4">
+				<div class="card-header">Schedule a recording</div>
+				<div class="card-body">
+					<div class="row g-2" style="max-width: 900px;">
+						<div class="col-md-3">
+							<label class="form-label">Channel</label>
+							<select class="form-select" id="addRecChan">
+								{{range .Providers}}
+								{{ $p := .Id }}
+								{{range .Streams}}
+								<option value="{{ $p }}/{{ .Id }}">{{ $p }} / {{ .Name }}</option>
+								{{end}}
+								{{end}}
+							</select>
+						</div>
+						<div class="col-md-2"><label class="form-label">Start date</label><input type="date" class="form-control" id="recStartDate"/></div>
+						<div class="col-md-2"><label class="form-label">Start time</label><input type="time" class="form-control" id="recStartTime"/></div>
+						<div class="col-md-2"><label class="form-label">End date</label><input type="date" class="form-control" id="recEndDate"/></div>
+						<div class="col-md-2"><label class="form-label">End time</label><input type="time" class="form-control" id="recEndTime"/></div>
+						<div class="col-md-1 d-flex align-items-end">
+							<button class="btn btn-primary w-100" id="addRecButton" onclick="dsAddRec()">ADD</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="recTable">
+				<thead>
+					<TR>
+						<TH style="text-align:center;">Title</TH>
+						<TH style="text-align:center;">Provider</TH>
+						<TH style="text-align:center;">Channel</TH>
+						<TH style="text-align:center;">Start</TH>
+						<TH style="text-align:center;">End</TH>
+						<TH style="text-align:center;">Status</TH>
+						<TH style="text-align:center;">Actions</TH>
+					</TR>
+				</thead>
+				<tbody>
+					{{range .Recordings}}
+					<TR>
+						<TD style="text-align:center;">{{ .Title }}</TD>
+						<TD style="text-align:center;">{{ .Provider }}</TD>
+						<TD style="text-align:center;">{{ .Channel }}</TD>
+						<TD style="text-align:center;">{{ .StartFmt }}</TD>
+						<TD style="text-align:center;">{{ .EndFmt }}</TD>
+						<TD style="text-align:center;">{{ .Status }}</TD>
+						<TD style="text-align:center;">
+							<button class="btn btn-danger btn-sm" onclick="dsRecDelete({{ .Id }})">DELETE</button>
+							<button class="btn btn-secondary btn-sm" onclick="dsRecStop({{ .Id }})">STOP</button>
+						</TD>
+					</TR>
+					{{else}}
+					<TR><TD colspan="7" style="text-align:center;">no recordings</TD></TR>
+					{{end}}
+				</tbody>
+			</table>
+		</div>
+
+		<script type="text/javascript">
+			document.getElementById('recbutton').style.backgroundColor = 'darkblue';
+
+			async function dsPost(body) {
+				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(body)
+				});
+				if (!response.ok) { showStatusWindow(await response.text()); return false; }
+				return true;
+			}
+
+			async function dsAddRec() {
+				var chan = document.getElementById('addRecChan').value;
+				if (!chan) { return; }
+				var parts = chan.split('/');
+				var body = {
+					Action: 'addrec',
+					ProviderId: parts[0],
+					Streams: [ { Id: parts[1] } ],
+					Start: document.getElementById('recStartDate').value + 'T' + document.getElementById('recStartTime').value,
+					End: document.getElementById('recEndDate').value + 'T' + document.getElementById('recEndTime').value
+				};
+				if (await dsPost(body)) { location.reload(); }
+			}
+
+			async function dsRecDelete(id) {
+				if (!confirm('Delete recording ' + id + '?')) { return; }
+				if (await dsPost({ Action: 'deleterec', Streams: [ { Id: String(id) } ] })) { location.reload(); }
+			}
+
+			async function dsRecStop(id) {
+				if (await dsPost({ Action: 'stoprec', Streams: [ { Id: String(id) } ] })) { location.reload(); }
+			}
+		</script>
+	</body>
+</html>

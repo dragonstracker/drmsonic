@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+	{{template "headers.html" .}}
+	<body>
+		{{template "menu.html" .}}
+
+		<div style="margin-top: -130px;">
+			<div style="display: flex;">
+				<div style="float: left">
+					<form id="filterForm">
+						<div style='width: 350px;' class="input-group mb-3">
+							<span style='width: 70px;' class="input-group-text">FILTER</span>
+							<select style='text-align:center; vertical-align:middle; font-weight: bold' id="filterselection" class="form-select">
+								<option value="">Select</option>
+								<option value="channels">Channels</option>
+								<option value="events">Events</option>
+								<option value="4k">4k</option>
+								<option value="1080p">1080p</option>
+								<option value="720p">720p</option>
+								<option value="sd">SD</option>
+								<option value="allrunning">All Running</option>
+								<option value="running">Running</option>
+								<option value="withkeys">With Keys</option>
+								<option value="withoutkeys">Without Keys</option>
+								<option value="missingkeys">Missing Keys</option>
+								<option value="nomissingkey">No missing Key</option>
+								<option value="withmanifest">With Manifest</option>
+								<option value="withoutmanifest">Without Manifest</option>
+								<option value="error">In Error</option>
+							</select>
+							<span style='width: 100px; font-weight: bold' class="input-group-text" id="currentFilter"></span>
+							<input type="submit" class="btn btn-primary btn-sm" id="deletefilter" value="X"/>
+						</div>
+					</form>
+					<br>
+					Total: &nbsp;&nbsp;{{ .StreamCount }} stream(s)
+					<br><br><br>
+					<select style='text-align:center; vertical-align:middle; font-weight: bold; width: 335px; height: 30px' id="providerSelection">
+						{{range .Providers}}
+						<option value="{{ .Id }}" {{selected .Id $.ProviderId}}>{{ .Name }}</option>
+						{{end}}
+					</select>
+				</div>
+			</div>
+			<br>
+
+			<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="streamsTable">
+				<thead>
+					<TR>
+						<TH height="100pix" colspan="10" style="text-align:center; font-size:16px; position: sticky; top: 0; border-bottom: 0;">{{ .ProviderId }}
+							&nbsp;<img id="logo" style="vertical-align: middle;" width="50" onerror="this.style.visibility = 'hidden'" /><a style="line-height:50%;">&nbsp;&nbsp;{{ .StreamCount }} stream(s)</a></TH>
+					</TR>
+				</thead>
+				<tbody>
+					{{range .Streams}}
+					{{ $n := printf "_%s_%s" $.ProviderId .Id }}
+					<TR height="60px">
+						<TD style="width:20px; text-align:center; vertical-align:middle;">
+							<input class="form-check-input" type="checkbox" id="checked{{ $n }}"/>
+						</TD>
+						<TD style="width:30px; text-align:center; vertical-align:middle;">
+							<img id="qualitylogo{{ $n }}" width="20">
+						</TD>
+						<TD style='text-align:center; vertical-align:middle; font-weight: bold; border-bottom: 0;'>
+							<a id="name{{ $n }}" type="button" class="btn btn-outline-primary"><font size="+4">{{ .Name }}</font></a>
+							<div style="line-height:20%;"><br></div>
+							<button style="border-color: transparent;" type="button" class="btn" id="startStop{{ $n }}"></button>
+							<a href="config/{{ $.ProviderId }}?search={{ .Id }}">
+								<img style="width: 20px; height: auto;" src="static/gear.svg"/>
+							</a>
+							<div hidden id="statusfull{{ $n }}"></div>
+							<div style="line-height:20%;"><br></div>
+							<pre style="white-space: pre-wrap;" id="status{{ $n }}"></pre>
+							<div style="line-height:0%;"><br></div>
+							<pre style="white-space: pre-wrap;" id="streamerrors{{ $n }}"></pre>
+							<div style="line-height:40%;"><br></div>
+						</TD>
+					</TR>
+					{{end}}
+				</tbody>
+			</table>
+			<br><br>
+		</div>
+
+		<script type="text/javascript">
+			const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+			const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+
+			initPlayer();
+
+			document.getElementById('statusbutton').style.backgroundColor = 'darkblue';
+
+			var url = new URL(window.location.href);
+			let params = new URLSearchParams(url.search);
+			document.getElementById('currentFilter').innerText = params.get('filter') || "";
+			document.getElementById('filterselection').onchange = filterOnChange;
+			document.getElementById('deletefilter').onclick = filterDeleteOnClick;
+
+			document.getElementById('providerSelection').selectedIndex = -2;
+			for (i=0; i<document.getElementById('providerSelection').length; i++) {
+				if (document.getElementById('providerSelection').options[i].value == '{{ .ProviderId }}') {
+					document.getElementById('providerSelection').selectedIndex = i;
+				}
+			}
+			document.getElementById('providerSelection').onchange = refreshStatusWithProvider;
+
+			updateStatus();
+			intervalId = setInterval("updateStatus();", 1000);
+		</script>
+	</body>
+</html>

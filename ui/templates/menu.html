@@ -1,0 +1,49 @@
+{{ $mp := .MenuProvider }}
+<div class="badge bg-primary" style="float: right; margin-right: 20px; margin-top: 10px; margin-bottom: -40px">Logged as {{ .Username }}</div>
+<div style="display:inline-block;">
+	<div style="float: left; margin-top: 10px; margin-left: 20px; margin-right: 70px;">
+		<pre>
+   ____  ____  __  __ _____  ____  _   _ _____ _____
+  |  _ \|  _ \|  \/  |  ___|/ __ \| \ | |_   _|  ___|
+  | | | | |_) | |\/| | |_  | |  | |  \| | | | | |_
+  | |_| |  _ &lt;| |  | |  _| | |__| | |\  | | | |  _|
+  |____/|_| \_\_|  |_|_|    \____/|_| \_| |_| |_|
+
+    <b>drmsonic</b> {{ .Tag }}</pre></div>
+	<div class="btn-group" role="group" style="margin-top:50px; margin-right: 100px">
+		<a id="providersbutton" href="providers" class="btn btn-primary" style="width:100px;">Providers</a>
+		<a id="statusbutton" href="status/{{ $mp }}" class="btn btn-primary" style="width:100px;">Streams</a>
+		<a id="eventsbutton" href="events/{{ $mp }}" class="btn btn-primary" style="width:100px;">Events</a>
+		<a id="monitoringbutton" href="monitoring" class="btn btn-primary" style="width:100px;">Monitoring</a>
+		<a id="configbutton" href="config/{{ $mp }}" class="btn btn-primary" style="width:100px;">Config</a>
+		<a id="usersbutton" href="users" class="btn btn-primary" style="width:100px;">Users</a>
+		<a id="recbutton" href="rec" class="btn btn-primary" style="width:100px;">Recordings</a>
+		&nbsp;&nbsp;&nbsp;&nbsp;
+		<div class="dropdown">
+			<button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+				Playlist
+			</button>
+			<ul class="dropdown-menu">
+				<li><a class="dropdown-item" href="playlist.m3u">Full</a></li>
+				<li><a class="dropdown-item" href="live.m3u">Live</a></li>
+				<li><a class="dropdown-item" href="event.m3u">Events</a></li>
+				<li><a class="dropdown-item" href="replay.m3u">Replays</a></li>
+				<li><a class="dropdown-item" href="app1.conf">App1</a></li>
+			</ul>
+		</div>
+		&nbsp;&nbsp;&nbsp;&nbsp;<a id="helpbutton" href="help" class="btn btn-primary" style="width:60px;">Help</a>
+	</div>
+	<div id="playerDiv" style="float: right; margin-top: 10px; display: none; margin-left: -50px;">
+		<div class="col-sm" style="padding: 20px;">
+			<div id="currentChannel" style="text-align:center;">&nbsp;</div>
+			<div><video width="462" height="260" controls id="player"></video></div>
+			<div id="trackselection" style="display:inline-block; display: none">
+				<select id="playerAudioSelect" >
+				</select>
+				<select id="playerSubtitlesSelect" >
+				</select>
+			</div>
+		</div>
+	</div>
+</div>
+<br>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+	{{template "headers.html" .}}
+	<body>
+		{{template "menu.html" .}}
+
+		<div style="margin-top: -120px; margin-left: 20px; margin-right: 20px; max-width: 1100px;">
+			<h1>drmsonic {{ .Tag }}</h1>
+			<p>Live and replay OTT restreamer. Pulls DASH, HLS and Smooth Streaming manifests, decrypts CENC
+			content, remuxes the elementary streams and republishes them as HLS with an in-memory segment store.</p>
+
+			<h3>Quick start</h3>
+			<ol>
+				<li>Open <b>Providers</b> and create a provider.</li>
+				<li>Open <b>Config</b>, add a stream and paste the manifest URL.</li>
+				<li>For encrypted sources, paste <code>kid:key</code> pairs into <b>Keys</b>, one per line.</li>
+				<li>Press <b>SAVE ALL</b>, then <b>START</b> on the <b>Streams</b> page.</li>
+				<li>Play from <code>/stream/&lt;provider&gt;/&lt;stream&gt;/master.m3u8</code>.</li>
+			</ol>
+
+			<h3>Stream modes</h3>
+			<ul>
+				<li><code>live</code> &mdash; rolling window, segments expire as new ones arrive.</li>
+				<li><code>replay</code> &mdash; fixed timeline, seekable from the start.</li>
+				<li><code>vod</code> &mdash; static asset, no rolling window.</li>
+			</ul>
+
+			<h3>Running modes</h3>
+			<ul>
+				<li><code>internalremuxer</code> &mdash; native pipeline. No external process, everything in RAM.</li>
+			</ul>
+
+			<h3>Output modes</h3>
+			<ul>
+				<li><code>directhls</code> &mdash; HTTP HLS served from the panel itself.</li>
+				<li><code>udppush</code> &mdash; MPEG-TS over UDP unicast or multicast, 7 packets per datagram.</li>
+			</ul>
+
+			<h3>Keys</h3>
+			<p>ClearKey pairs use <code>kid:key</code> hex notation. 16-byte keys are AES-128. Sample
+			encryption is AES-CTR (CENC <code>cenc</code>/<code>cens</code>); <code>cbcs</code> sources are rejected.
+			The <code>Fix IV size</code> switch forces 16-byte IV handling for packagers that emit 8-byte IVs.</p>
+
+			<h3>Network overrides</h3>
+			<ul>
+				<li><b>Bind</b> &mdash; source address and interface for outbound sockets.</li>
+				<li><b>Proxy</b> &mdash; <code>http://</code>, <code>https://</code> or <code>socks5://</code>.</li>
+				<li><b>DoH</b> &mdash; DNS-over-HTTPS resolver endpoint.</li>
+				<li><b>Network scope</b> &mdash; which phases the override applies to: <code>script,manifest,media</code>.</li>
+			</ul>
+
+			<h3>Playlists</h3>
+			<p><code>/playlist.m3u</code>, <code>/live.m3u</code>, <code>/event.m3u</code>, <code>/replay.m3u</code>
+			and <code>/app1.conf</code> expose every stream for external players.</p>
+
+			<h3>CLI</h3>
+			<pre>-b, -p           bind address and port
+-baseurl         public URL used in playlists
+-providers       providers directory
+-c               config file
+-user, -password static admin credentials
+-allow           comma separated no-auth admin source IPs
+-noautostart     do not start autostart streams
+-v               verbosity 1..3
+-accesslog       log every request
+-version         print version</pre>
+
+			<h3>Ship log</h3>
+			<p>Reads and writes <code>providers/*.json</code>. Each save is atomic: temp file then rename.
+			The panel never blocks on disk I/O during streaming.</p>
+		</div>
+
+		<script type="text/javascript">
+			document.getElementById('helpbutton').style.backgroundColor = 'darkblue';
+		</script>
+	</body>
+</html>

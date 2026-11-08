@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+	{{template "headers.html" .}}
+	<body>
+		{{template "menu.html" .}}
+
+		<div style="margin-top: -120px; margin-left: 20px; margin-right: 20px;">
+			<div class="input-group mb-3" style="width: 520px;">
+				<span class="input-group-text">PROVIDER</span>
+				<select class="form-select" id="providerSelection">
+					{{range .Providers}}
+					<option value="{{ .Id }}" {{selected .Id $.ProviderId}}>{{ .Name }}</option>
+					{{end}}
+				</select>
+				<button class="btn btn-primary" id="eventsrefresh" onclick="dsRefreshEvents()">REFRESH</button>
+			</div>
+
+			<div id="eventsstatus" class="mb-3"></div>
+
+			<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="eventstable">
+				<thead>
+					<TR>
+						<TH style="text-align:center;">Channel</TH>
+						<TH style="text-align:center;">Title</TH>
+						<TH style="text-align:center;">Start</TH>
+						<TH style="text-align:center;">End</TH>
+						<TH style="text-align:center;">Actions</TH>
+					</TR>
+				</thead>
+				<tbody>
+					{{range .Events}}
+					<TR>
+						<TD style="text-align:center;">{{ .Channel }}</TD>
+						<TD style="text-align:center;">{{ .Title }}</TD>
+						<TD style="text-align:center;">{{ .StartFmt }}</TD>
+						<TD style="text-align:center;">{{ .EndFmt }}</TD>
+						<TD style="text-align:center;"></TD>
+					</TR>
+					{{else}}
+					<TR><TD colspan="5" style="text-align:center;">no events</TD></TR>
+					{{end}}
+				</tbody>
+			</table>
+
+			<br><br>
+			<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="replaystable">
+				<thead>
+					<TR>
+						<TH style="text-align:center;">Title</TH>
+						<TH style="text-align:center;">Channel</TH>
+						<TH style="text-align:center;">Start</TH>
+						<TH style="text-align:center;">End</TH>
+						<TH style="text-align:center;">Actions</TH>
+					</TR>
+				</thead>
+				<tbody>
+					{{range .Replays}}
+					<TR>
+						<TD style="text-align:center;">{{ .Title }}</TD>
+						<TD style="text-align:center;">{{ .Channel }}</TD>
+						<TD style="text-align:center;">{{ .StartFmt }}</TD>
+						<TD style="text-align:center;">{{ .EndFmt }}</TD>
+						<TD style="text-align:center;"></TD>
+					</TR>
+					{{else}}
+					<TR><TD colspan="5" style="text-align:center;">no replays</TD></TR>
+					{{end}}
+				</tbody>
+			</table>
+		</div>
+
+		<script type="text/javascript">
+			document.getElementById('eventsbutton').style.backgroundColor = 'darkblue';
+			initPlayer();
+
+			document.getElementById('providerSelection').onchange = function () {
+				location.href = 'events/' + this.value;
+			};
+
+			async function dsRefreshEvents() {
+				var pid = document.getElementById('providerSelection').value;
+				await fetch(document.getElementById('baseUrl').value + 'api/action', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ Action: 'eventsrefreshrequest', ProviderId: pid })
+				});
+				location.reload();
+			}
+		</script>
+	</body>
+</html>

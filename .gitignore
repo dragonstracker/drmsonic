@@ -1,0 +1,11 @@
+bin/
+dist/
+testrun/
+_import/
+*.tmp
+*.log
+*.exe
+drmsonic.json
+.DS_Store
+providers/*.json
+!providers/example.json

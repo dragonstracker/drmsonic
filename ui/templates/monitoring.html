@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+	{{template "headers.html" .}}
+	<body>
+		{{template "menu.html" .}}
+
+		<div style="margin-top: -120px; margin-left: 20px; margin-right: 20px;">
+
+			<div class="row g-3 mb-4" style="width: 900px;">
+				<div class="col-md-3">
+					<div class="card text-center">
+						<div class="card-header">CPU LOAD</div>
+						<div class="card-body"><input class="form-control-plaintext text-center h4" id="cpuLoadText" readonly value="-"/></div>
+					</div>
+				</div>
+				<div class="col-md-3">
+					<div class="card text-center">
+						<div class="card-header">MEMORY</div>
+						<div class="card-body"><input class="form-control-plaintext text-center h4" id="memoryText" readonly value="-"/></div>
+					</div>
+				</div>
+				<div class="col-md-3">
+					<div class="card text-center">
+						<div class="card-header">BANDWIDTH IN</div>
+						<div class="card-body"><input class="form-control-plaintext text-center h4" id="totalBwInText" readonly value="-"/></div>
+					</div>
+				</div>
+				<div class="col-md-3">
+					<div class="card text-center">
+						<div class="card-header">BANDWIDTH OUT</div>
+						<div class="card-body"><input class="form-control-plaintext text-center h4" id="totalBwOutText" readonly value="-"/></div>
+					</div>
+				</div>
+			</div>
+
+			<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="readersTable">
+				<thead>
+					<TR>
+						<TH style="text-align:center;">Stream</TH>
+						<TH style="text-align:center;">Provider</TH>
+						<TH style="text-align:center;">Type</TH>
+						<TH style="text-align:center;">User</TH>
+						<TH style="text-align:center;">IP</TH>
+						<TH style="text-align:center;">User-Agent</TH>
+						<TH style="text-align:center;">Uptime</TH>
+						<TH style="text-align:center;">Errors</TH>
+						<TH style="text-align:center;">Bandwidth</TH>
+					</TR>
+				</thead>
+				<tbody></tbody>
+			</table>
+		</div>
+
+		<script type="text/javascript">
+			document.getElementById('monitoringbutton').style.backgroundColor = 'darkblue';
+
+			var intervalId = null;
+
+			var table = $('#readersTable').DataTable({
+				"ordering": false,
+				"paging": false,
+				"searching": false,
+				"info": false,
+				"columns": [
+					{ "width": "20%" }, { "width": "10%" }, { "width": "6%" }, { "width": "8%" },
+					{ "width": "10%" }, { "width": "24%" }, { "width": "8%" }, { "width": "6%" }, { "width": "8%" }
+				]
+			});
+
+			updateMonitoring(table);
+			intervalId = setInterval(function () { updateMonitoring(table); }, 2000);
+		</script>
+	</body>
+</html>
