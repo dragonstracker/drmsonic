@@ -3,12 +3,9 @@ package cenc
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"errors"
 
 	"drmsonic/internal/mp4"
 )
-
-var ErrNoKey = errors.New("cenc: no key for sample")
 
 func DecryptSample(key, iv, sample []byte, subs []mp4.Subsample) ([]byte, error) {
 	block, err := aes.NewCipher(key)
@@ -50,27 +47,4 @@ func DecryptSample(key, iv, sample []byte, subs []mp4.Subsample) ([]byte, error)
 		out = append(out, sample[pos:]...)
 	}
 	return out, nil
-}
-
-func KeyFor(keys map[string][]byte, kid []byte, iv []byte) []byte {
-	if kid != nil {
-		if k, ok := keys[hexLocal(kid)]; ok {
-			return k
-		}
-	}
-	if len(keys) == 1 {
-		for _, k := range keys {
-			return k
-		}
-	}
-	return nil
-}
-
-func hexLocal(b []byte) string {
-	const hexdigits = "0123456789abcdef"
-	out := make([]byte, 0, len(b)*2)
-	for _, c := range b {
-		out = append(out, hexdigits[c>>4], hexdigits[c&0x0F])
-	}
-	return string(out)
 }

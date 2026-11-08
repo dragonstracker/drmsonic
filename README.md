@@ -69,6 +69,13 @@ Docker:
 docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine sh build.sh
 ```
 
+Tests:
+
+```sh
+go vet ./...
+go test ./...
+```
+
 ## Run
 
 ```sh

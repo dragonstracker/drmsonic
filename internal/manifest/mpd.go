@@ -35,6 +35,8 @@ type AdaptationSet struct {
 	Lang            string           `xml:"lang,attr"`
 	Label           string           `xml:"Label"`
 	BaseURL         []string         `xml:"BaseURL"`
+	Template        *SegmentTemplate `xml:"SegmentTemplate"`
+	List            *SegmentList     `xml:"SegmentList"`
 	Representations []Representation `xml:"Representation"`
 }
 
@@ -112,6 +114,8 @@ type Track struct {
 	PTO         int64
 	KID         string
 	StartNumber int64
+	StartedAt   time.Time
+	Duration    time.Duration
 }
 
 type Manifest struct {
@@ -121,6 +125,7 @@ type Manifest struct {
 	StartedAt    time.Time
 	BufferDepth  time.Duration
 	Static       bool
+	Duration     time.Duration
 	Video        []Track
 	Audio        []Track
 	Text         []Track
@@ -147,6 +152,7 @@ func ParseMPD(data []byte, pageURL *url.URL) (*Manifest, error) {
 		m.UpdatePeriod = 5 * time.Second
 	}
 	m.BufferDepth = parseDuration(mpd.TimeShiftBufferDepth)
+	m.Duration = parseDuration(mpd.MediaPresentationDuration)
 
 	root := resolveURL(pageURL, firstOf(mpd.BaseURL))
 
@@ -159,8 +165,8 @@ func ParseMPD(data []byte, pageURL *url.URL) (*Manifest, error) {
 			for _, rep := range as.Representations {
 				repBase := resolveURL(asBase, firstOf(rep.BaseURL))
 
-				tmpl := rep.Template
-				list := rep.List
+				tmpl := mergeTemplate(as.Template, rep.Template)
+				list := mergeList(as.List, rep.List)
 
 				tr := Track{
 					Kind:      kind,
@@ -174,6 +180,8 @@ func ParseMPD(data []byte, pageURL *url.URL) (*Manifest, error) {
 					Rate:      rep.AudioSamplingRate,
 					Base:      repBase,
 					Timescale: 1000,
+					StartedAt: m.StartedAt,
+					Duration:  m.Duration,
 				}
 				if kind == "text" {
 					continue
@@ -304,10 +312,7 @@ func (t *Track) tailTemplate(tail int) []SegmentRef {
 	refs := make([]SegmentRef, 0, tail)
 
 	if tmpl.Timeline == nil || len(tmpl.Timeline.Items) == 0 {
-		if tmpl.Duration <= 0 {
-			return nil
-		}
-		return nil
+		return t.tailDuration(tail)
 	}
 
 	type entry struct {
@@ -351,6 +356,123 @@ func (t *Track) tailTemplate(tail int) []SegmentRef {
 		})
 	}
 	return refs
+}
+
+func (t *Track) tailDuration(tail int) []SegmentRef {
+	tmpl := t.Template
+	if tmpl == nil || tmpl.Duration <= 0 || tmpl.Media == "" {
+		return nil
+	}
+	ts := t.Timescale
+	if ts <= 0 {
+		ts = 1000
+	}
+	segTicks := tmpl.Duration
+	segSeconds := float64(segTicks) / float64(ts)
+	if segSeconds <= 0 {
+		return nil
+	}
+
+	var last int64
+	if t.StartedAt.IsZero() {
+		if t.Duration <= 0 {
+			return nil
+		}
+		total := int64(t.Duration.Seconds() / segSeconds)
+		if total <= 0 {
+			return nil
+		}
+		last = total - 1
+	} else {
+		elapsed := time.Since(t.StartedAt).Seconds()
+		if elapsed < 0 {
+			return nil
+		}
+		last = int64(elapsed/segSeconds) - 1
+		if last < 0 {
+			last = 0
+		}
+	}
+
+	first := last - int64(tail) + 1
+	if tail <= 0 || first < 0 {
+		first = 0
+	}
+	refs := make([]SegmentRef, 0, last-first+1)
+	for i := first; i <= last; i++ {
+		number := tmpl.StartNumber + i
+		if number == 0 {
+			number = i + 1
+		}
+		u := expandTemplate(tmpl.Media, t.ID, t.Bandwidth, number, i*segTicks)
+		refs = append(refs, SegmentRef{
+			Number:   number,
+			Time:     i * segTicks,
+			Duration: segTicks,
+			URL:      resolveURL(t.Base, u).String(),
+		})
+	}
+	return refs
+}
+
+func mergeTemplate(parent, child *SegmentTemplate) *SegmentTemplate {
+	if parent == nil {
+		return child
+	}
+	if child == nil {
+		out := *parent
+		return &out
+	}
+	out := *parent
+	if child.Timescale > 0 {
+		out.Timescale = child.Timescale
+	}
+	if child.Duration > 0 {
+		out.Duration = child.Duration
+	}
+	if child.StartNumber > 0 {
+		out.StartNumber = child.StartNumber
+	}
+	if child.Media != "" {
+		out.Media = child.Media
+	}
+	if child.Initialization != "" {
+		out.Initialization = child.Initialization
+	}
+	if child.PresentationTimeOffset != 0 {
+		out.PresentationTimeOffset = child.PresentationTimeOffset
+	}
+	if child.Timeline != nil && len(child.Timeline.Items) > 0 {
+		out.Timeline = child.Timeline
+	}
+	return &out
+}
+
+func mergeList(parent, child *SegmentList) *SegmentList {
+	if parent == nil {
+		return child
+	}
+	if child == nil {
+		out := *parent
+		return &out
+	}
+	out := *parent
+	if child.Duration > 0 {
+		out.Duration = child.Duration
+	}
+	if child.Timescale > 0 {
+		out.Timescale = child.Timescale
+	}
+	if child.Initialization != nil {
+		out.Initialization = child.Initialization
+	}
+	if len(child.SegmentURLs) > 0 {
+		out.SegmentURLs = child.SegmentURLs
+	}
+	if child.Timeline != nil {
+		out.Timeline = child.Timeline
+	}
+	return &out
 }
 
 func (t *Track) tailList(tail int) []SegmentRef {
