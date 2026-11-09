@@ -34,6 +34,8 @@ Versions follow the release tags on GitHub.
 - SAVE USERS (`users_only`) and SAVE ALL PROVIDERS persistence.
 - User rename ignored `NewUserName` from the panel.
 - New users default to Web Access on.
+- Config / Channels built the full editor only for the page that was open on first load, so any channel reached by paging, **Show All**, or search showed an empty row. Every channel now builds its editor when it is drawn.
+- Config / Channels column widths summed past 100% and pushed the options column out of the window.
 
 ### Added
 - Default `admin` / `admin` on first install when no passwords exist (changeable under Users).
