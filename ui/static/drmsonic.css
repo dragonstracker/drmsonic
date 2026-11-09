@@ -3,8 +3,7 @@
 }
 
 #streamsTable .form-check {
-	margin-bottom: 0;
-	min-height: 16px;
+	margin-bottom: 0.15rem;
 }
 
 #streamsTable pre {
@@ -13,8 +12,8 @@
 	word-break: break-word;
 }
 
-#streamsTable div[id^="checkboxes"] {
-	overflow: visible !important;
-	height: auto !important;
-	max-height: none !important;
+#streamsTable input::placeholder,
+#streamsTable textarea::placeholder {
+	color: #6c757d;
+	opacity: 1;
 }

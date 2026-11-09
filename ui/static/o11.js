@@ -1637,32 +1637,36 @@ async function populateStream(item) {
 	document.getElementById('showheaders' + id).style.display = 'none';
 
 	document.getElementById('headersmanifest' + id).value = ""
-	if (item.Stream.Headers.Manifest) {
-		Object.keys(item.Stream.Headers.Manifest).forEach(key => {
-			document.getElementById('headersmanifest' + id).value += key + ': ' + item.Stream.Headers.Manifest[key] + '\n';
-		});
-		document.getElementById('showheaders' + id).style.display = 'block';
-		document.getElementById('headersDiv' + id).style.marginLeft = 'auto';
-		document.getElementById('headersDiv' + id).style.marginRight = 'auto';
-	}
 	document.getElementById('headersmedia' + id).value = ""
-	if (item.Stream.Headers.Media) {
-		Object.keys(item.Stream.Headers.Media).forEach(key => {
-			document.getElementById('headersmedia' + id).value += key + ': ' + item.Stream.Headers.Media[key] + '\n';
-		});
-		document.getElementById('showheaders' + id).style.display = 'block';
-		document.getElementById('headersDiv' + id).style.marginLeft = 'auto';
-		document.getElementById('headersDiv' + id).style.marginRight = 'auto';
+	var streamHeaders = item.Stream.Headers;
+	if (streamHeaders && !Array.isArray(streamHeaders)) {
+		var hasManifestHeaders = streamHeaders.Manifest && Object.keys(streamHeaders.Manifest).length > 0;
+		var hasMediaHeaders = streamHeaders.Media && Object.keys(streamHeaders.Media).length > 0;
+		if (hasManifestHeaders) {
+			Object.keys(streamHeaders.Manifest).forEach(key => {
+				document.getElementById('headersmanifest' + id).value += key + ': ' + streamHeaders.Manifest[key] + '\n';
+			});
+		}
+		if (hasMediaHeaders) {
+			Object.keys(streamHeaders.Media).forEach(key => {
+				document.getElementById('headersmedia' + id).value += key + ': ' + streamHeaders.Media[key] + '\n';
+			});
+		}
+		if (hasManifestHeaders || hasMediaHeaders) {
+			document.getElementById('showheaders' + id).style.display = 'block';
+			document.getElementById('headersDiv' + id).style.marginLeft = 'auto';
+			document.getElementById('headersDiv' + id).style.marginRight = 'auto';
+		}
 	}
 
-	document.getElementById('manifestscript' + id).value = item.Stream.ManifestScript;
-	document.getElementById('manifestUrl' + id).value = item.Stream.Manifest;
+	document.getElementById('manifestscript' + id).value = item.Stream.ManifestScript || "";
+	document.getElementById('manifestUrl' + id).value = item.Stream.Manifest || "";
 
 	// Network
-	document.getElementById('proxy' + id).value = item.Stream.Proxy;
-	document.getElementById('bind' + id).value = item.Stream.Bind;
-	document.getElementById('doh' + id).value = item.Stream.Doh;
-	$('#networkscope' + id).val(item.Stream.NetworkScope.split(","));
+	document.getElementById('proxy' + id).value = item.Stream.Proxy || "";
+	document.getElementById('bind' + id).value = item.Stream.Bind || "";
+	document.getElementById('doh' + id).value = item.Stream.Doh || "";
+	$('#networkscope' + id).val((item.Stream.NetworkScope || "").split(","));
 	$('#networkscope' + id).selectpicker("refresh");
 
 	// Video
@@ -2182,7 +2186,7 @@ async function updateStreams(table, init) {
 							</div>
 							<br>`);
 
-							content=`<div id="checkboxes` + id + `">
+							content=`<div style="overflow-y: scroll; height: 65%" id="checkboxes` + id + `">
 							<div class="form-check" title="Autostart stream on startup.">
 								<input class="form-check-input" type="checkbox" id="autostart` + id + `" />
 								<label class="form-check-label" for="autostart` + id + `">Autostart</label>

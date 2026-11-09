@@ -844,7 +844,37 @@ func matchIDs(ids []string, id string) bool {
 	return false
 }
 
+func streamHeadersUI(st *config.Stream) map[string]any {
+	manifest := map[string]string{}
+	media := map[string]string{}
+	for _, line := range st.Headers {
+		k, v, ok := strings.Cut(strings.TrimSpace(line), ":")
+		if !ok {
+			continue
+		}
+		manifest[strings.TrimSpace(k)] = strings.TrimSpace(v)
+		media[strings.TrimSpace(k)] = strings.TrimSpace(v)
+	}
+	return map[string]any{"Manifest": manifest, "Media": media}
+}
+
 func streamToMap(st *config.Stream) map[string]any {
+	videoList := st.VideoList
+	if videoList == nil {
+		videoList = []config.Track{}
+	}
+	audioList := st.AudioList
+	if audioList == nil {
+		audioList = []config.Track{}
+	}
+	subtitlesList := st.SubtitlesList
+	if subtitlesList == nil {
+		subtitlesList = []config.Track{}
+	}
+	keys := st.Keys
+	if keys == nil {
+		keys = []string{}
+	}
 	return map[string]any{
 		"Name":                   st.Name,
 		"Id":                     st.Id,
@@ -854,14 +884,14 @@ func streamToMap(st *config.Stream) map[string]any {
 		"ManifestUrl":            st.Manifest,
 		"SessionManifest":        st.SessionManifest,
 		"ManifestScript":         st.ManifestScript,
-		"Headers":                st.Headers,
+		"Headers":                streamHeadersUI(st),
 		"Video":                  st.Video,
 		"Audio":                  st.Audio,
 		"Subtitles":              st.Subtitles,
-		"VideoList":              st.VideoList,
-		"AudioList":              st.AudioList,
-		"SubtitlesList":          st.SubtitlesList,
-		"Keys":                   st.Keys,
+		"VideoList":              videoList,
+		"AudioList":              audioList,
+		"SubtitlesList":          subtitlesList,
+		"Keys":                   keys,
 		"UseCdm":                 st.UseCdm,
 		"CdmType":                st.CdmType,
 		"CdmMode":                st.CdmMode,
