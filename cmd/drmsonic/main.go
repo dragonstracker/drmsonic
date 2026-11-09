@@ -65,6 +65,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+	if *user == "" {
+		if err := store.EnsureDefaultAdmin(); err != nil {
+			log.Fatalf("default admin: %v", err)
+		}
+	}
 
 	mgr := state.NewManager()
 

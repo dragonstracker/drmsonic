@@ -107,5 +107,6 @@ else
 	log "installed"
 fi
 log "panel: http://${PUBLIC_IP:-<server-ip>}:${PORT}"
+log "login: admin / admin  (change under Users after first login)"
 log "status: systemctl status ${SERVICE} --no-pager"
 log "logs:   journalctl -u ${SERVICE} -f"

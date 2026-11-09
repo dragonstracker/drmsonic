@@ -38,7 +38,7 @@
 					</TD>
 					<TD style='text-align:center; vertical-align:middle; width:250px'>
 						<div id="passwordDiv{{$n}}">
-							<input class="form-control" placeholder="new password" aria-label="password" id="password{{$n}}" type="password" value=""/>
+							<input class="form-control" placeholder="{{ if $s.Password }}leave blank to keep{{ else }}set password{{ end }}" aria-label="password" id="password{{$n}}" type="password" value=""/>
 						</div>
 					</TD>
 					<TD style='text-align:center; vertical-align:middle; width:250px'>

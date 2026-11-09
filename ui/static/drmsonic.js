@@ -1673,17 +1673,19 @@ async function populateStream(item) {
 	var vStreamId = 'vStreamId' + id
 	$('#' + vStreamId).empty();
 
-	sel = ""
-	if (item.Stream.VideoList != null && item.Stream.VideoList.length > 0 && item.Stream.VideoList[0].Id == "best") {
-		sel = "selected"
-	}
+	var videoSel = item.Stream.Video || "best";
+	sel = (videoSel == "best" || videoSel == "") ? "selected" : "";
 	$('#' + vStreamId).append('<option ' + sel + ' value="best">Best quality</option>');
+	sel = (videoSel == "all") ? "selected" : "";
+	$('#' + vStreamId).append('<option ' + sel + ' value="all">All qualities</option>');
 
-	sel = ""
 	if (item.Stream.VideoList != null) {
 		for (i=0; i<item.Stream.VideoList.length; i++) {
+			if (item.Stream.VideoList[i].Id == "best" || item.Stream.VideoList[i].Id == "all") {
+				continue
+			}
 			sel = ""
-			if (item.Stream.VideoList[i].Id == item.Stream.Video) {
+			if (item.Stream.VideoList[i].Id == videoSel) {
 				sel = "selected"
 			}
 

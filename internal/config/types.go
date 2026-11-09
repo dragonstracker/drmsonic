@@ -287,6 +287,33 @@ func EnsureUserTokens(users []User) ([]User, bool) {
 	return users, changed
 }
 
+func EnsureDefaultAdmin(users []User) ([]User, bool) {
+	for _, u := range users {
+		if u.Password != "" {
+			return users, false
+		}
+	}
+	for i := range users {
+		if users[i].Username != "admin" {
+			continue
+		}
+		users[i].Password = "admin"
+		users[i].IsAdmin = true
+		users[i].HasWebAccess = true
+		if users[i].StreamToken == "" {
+			users[i].StreamToken = NewStreamToken()
+		}
+		return users, true
+	}
+	return append(users, User{
+		Username:     "admin",
+		Password:     "admin",
+		IsAdmin:      true,
+		HasWebAccess: true,
+		StreamToken:  NewStreamToken(),
+	}), true
+}
+
 type Config struct {
 	Users []User `json:"Users"`
 }

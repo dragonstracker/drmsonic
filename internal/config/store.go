@@ -50,6 +50,17 @@ func (s *Store) EnsureTokensPersisted() error {
 	return s.SaveUsers()
 }
 
+func (s *Store) EnsureDefaultAdmin() error {
+	s.mu.Lock()
+	users, changed := EnsureDefaultAdmin(s.users)
+	s.users = users
+	s.mu.Unlock()
+	if !changed {
+		return nil
+	}
+	return s.SaveUsers()
+}
+
 func (s *Store) Dir() string {
 	return s.dir
 }

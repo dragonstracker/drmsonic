@@ -184,3 +184,59 @@ func TestUpdateUserKeepsPassword(t *testing.T) {
 		t.Fatalf("password changed: %+v", got)
 	}
 }
+
+func TestSaveUsersOnly(t *testing.T) {
+	tok := config.NewStreamToken()
+	users := []config.User{{Username: "bob", Password: "x", StreamToken: tok, HasWebAccess: true, IsAdmin: true}}
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, users, sampleProvider("channels"))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/action", strings.NewReader(`{"Action":"save","ProviderId":"users_only"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://example.test")
+	req.Host = "example.test"
+	req.SetBasicAuth("admin", "secret")
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != 200 {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestRenameUserNewUserName(t *testing.T) {
+	tok := config.NewStreamToken()
+	users := []config.User{{Username: "bob", Password: "x", StreamToken: tok, HasWebAccess: true, IsAdmin: true}}
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, users, sampleProvider("channels"))
+	body := `{"Action":"renameuser","Users":[{"Username":"bob"}],"NewUserName":"alice"}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/action", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://example.test")
+	req.Host = "example.test"
+	req.SetBasicAuth("admin", "secret")
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != 200 {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	got := s.store.Users()
+	if len(got) != 1 || got[0].Username != "alice" {
+		t.Fatalf("rename failed: %+v", got)
+	}
+}
+
+func TestAddUserDefaultsWebAccess(t *testing.T) {
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, nil, sampleProvider("channels"))
+	body := `{"Action":"adduser","Users":[{"Username":"viewer"}]}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/action", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://example.test")
+	req.Host = "example.test"
+	req.SetBasicAuth("admin", "secret")
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != 200 {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	got := s.store.Users()
+	if len(got) != 1 || !got[0].HasWebAccess || got[0].IsAdmin {
+		t.Fatalf("defaults: %+v", got)
+	}
+}

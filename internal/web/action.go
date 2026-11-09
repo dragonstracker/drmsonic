@@ -276,6 +276,29 @@ func (s *Server) acGetMonitoring(w http.ResponseWriter, req actionRequest) {
 }
 
 func (s *Server) acSave(w http.ResponseWriter, req actionRequest) {
+	if req.ProviderId == "users_only" {
+		if err := s.store.SaveUsers(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.renderJSON(w, "ok")
+		return
+	}
+	if req.ProviderId == "" {
+		for _, p := range s.store.Providers() {
+			if err := s.store.Put(p); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		if err := s.store.SaveUsers(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.mgr.BumpGlobal()
+		s.renderJSON(w, "ok")
+		return
+	}
 	p := s.providerOrError(w, req.ProviderId)
 	if p == nil {
 		return
@@ -675,12 +698,21 @@ func (s *Server) acAddUser(w http.ResponseWriter, req actionRequest) {
 	if pass != "" {
 		tok = config.NewStreamToken()
 	}
+	isAdmin := false
+	if v, ok := src["IsAdmin"]; ok {
+		isAdmin = boolOf(v)
+	}
+	hasWeb := true
+	if v, ok := src["HasWebAccess"]; ok {
+		hasWeb = boolOf(v)
+	}
 	users = append(users, config.User{
 		Username:     name,
 		Password:     pass,
 		StreamToken:  tok,
-		IsAdmin:      boolOf(mapGet(src, "IsAdmin")),
-		HasWebAccess: boolOf(mapGet(src, "HasWebAccess")),
+		IsAdmin:      isAdmin,
+		HasWebAccess: hasWeb,
+		ProviderIds:  stringSlice(mapGet(src, "ProviderIds")),
 	})
 	s.store.SetUsers(users)
 	if err := s.store.SaveUsers(); err != nil {
@@ -770,13 +802,33 @@ func (s *Server) acRenameUser(w http.ResponseWriter, req actionRequest) {
 		name = str(mapGet(req.Raw, "NewUsername"))
 	}
 	if name == "" {
-		name = str(mapGet(req.userPayload(), "Username"))
+		name = str(mapGet(req.Raw, "NewUserName"))
+	}
+	if name == "" || old == "" {
+		http.Error(w, "missing username", http.StatusInternalServerError)
+		return
+	}
+	if name == old {
+		s.renderJSON(w, "ok")
+		return
 	}
 	users := s.store.Users()
+	found := false
+	for i := range users {
+		if users[i].Username == name {
+			http.Error(w, "user already exists", http.StatusInternalServerError)
+			return
+		}
+	}
 	for i := range users {
 		if users[i].Username == old {
 			users[i].Username = name
+			found = true
 		}
+	}
+	if !found {
+		http.Error(w, "unknown user", http.StatusInternalServerError)
+		return
 	}
 	s.store.SetUsers(users)
 	if err := s.store.SaveUsers(); err != nil {

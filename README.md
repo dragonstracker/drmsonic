@@ -176,18 +176,23 @@ A stream is keyed by `ProviderId/StreamId`; both appear in the playback URL.
 
 ## Auth
 
-Auth turns on when both `-user` and `-password` are set, or when any stored user has a non-empty password.
+On first start (no passwords stored, and no `-user`/`-password` flags), drmsonic creates a default admin:
 
-- Panel: browser login form at `/login` (session cookie). Logout via the top bar.
+| field | value |
+|-------|-------|
+| username | `admin` |
+| password | `admin` |
+
+Change it under **Users** after login. Auth stays on while any stored user has a password, or when both `-user` and `-password` are set on the CLI.
+
+- Panel: `/login` (session cookie). Logout from the top bar.
 - Playlists: opaque tokens, never username/password in the URL:
 
 ```
 hls://host:7779/t/<stream-token>/stream/channels/channel1/master.m3u8
 ```
 
-Tokens are random per user (Users page → Playlist menu). Guessing a username does not grant playlist access. Failed logins are rate-limited per IP.
-
-With auth off, URLs stay plain: `http://host:7779/stream/...`.
+Tokens are random per user (Users → Playlist). Failed logins are rate-limited per IP.
 
 ### Test `devloper` builds on a VPS
 

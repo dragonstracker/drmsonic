@@ -28,6 +28,13 @@ Versions follow the release tags on GitHub.
 - Admin vs panel-user capabilities were not enforced.
 - Guessable username/password playlist paths removed.
 - Selector comma filters (`h<=720,codec=avc1`) AND together instead of OR.
+- SAVE USERS (`users_only`) and SAVE ALL PROVIDERS persistence.
+- User rename ignored `NewUserName` from the panel.
+- New users default to Web Access on.
+
+### Added
+- Default `admin` / `admin` on first install when no passwords exist (changeable under Users).
+- Video track option **All qualities** alongside Best and per-rendition ids.
 
 ## [1.1.3] — 2026-11-09
 
