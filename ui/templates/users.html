@@ -84,9 +84,9 @@
 								</ul>
 							</div>
 							&nbsp;&nbsp;
-							<input type="button" class="btn btn-primary" id="renameuser{{$n}}" value="RENAME" />
+							<input type="button" class="btn btn-primary" data-user-action="rename" data-user-index="{{$n}}" value="RENAME" />
 							&nbsp;&nbsp;
-							<input type="button" class="btn btn-primary" id="deleteuser{{$n}}" value="DELETE" />
+							<input type="button" class="btn btn-primary" data-user-action="delete" data-user-index="{{$n}}" value="DELETE" />
 						</div>
 					</TD>
 				</TR>
@@ -97,13 +97,9 @@
 		<script type="text/javascript">
 			document.getElementById('usersbutton').style.backgroundColor = 'darkblue';
 
-			addUserForm.onsubmit = addUserFormSubmit;
-			saveusers.onclick = saveUsersClick;
-
-			{{range $n, $c := .Users}}
-				deleteuser{{$n}}.onclick = deleteUserClick;
-				renameuser{{$n}}.onclick = renameUserClick;
-			{{end}}
+			document.getElementById('addUserForm').onsubmit = addUserFormSubmit;
+			document.getElementById('saveusers').onclick = saveUsersClick;
+			document.getElementById('usersTable').addEventListener('click', usersTableClick);
 
 			var usersTable = $('#usersTable').removeAttr('width').DataTable({
 				"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",

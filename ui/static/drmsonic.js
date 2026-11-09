@@ -1384,10 +1384,21 @@ async function importProviderClick(e) {
 	el.click();
 }
 
-async function deleteUserClick(e) {
+function usersTableClick(e) {
+	var btn = e.target.closest('[data-user-action]');
+	if (!btn) {
+		return;
+	}
 	e.preventDefault();
-	n = this.id.replace("deleteuser", "")
+	var n = btn.getAttribute('data-user-index');
+	if (btn.getAttribute('data-user-action') == 'delete') {
+		deleteUser(n);
+	} else {
+		renameUser(n);
+	}
+}
 
+async function deleteUser(n) {
 	var result = confirm("Are you sure you want to delete " + document.getElementById('username' + n).innerText + "?");
 	if (result != true) {
 		return
@@ -1419,11 +1430,7 @@ async function deleteUserClick(e) {
 	}
 };
 
-// RENAME onClock
-async function renameUserClick(e) {
-	e.preventDefault();
-	n = this.id.replace("renameuser", "")
-
+async function renameUser(n) {
 	let newName = prompt("Please enter new user name");
 	if (newName == null || newName == "") {
 		return;
@@ -1454,7 +1461,6 @@ async function renameUserClick(e) {
 		document.getElementById('username' + n).innerText = newName;
 	}
 };
-
 
 // REFRESH  onCLick
 async function refreshClick(e) {
