@@ -122,7 +122,7 @@ func (h *staticHandler) asset(name string) *staticAsset {
 	if b, ok := bundles[name]; ok {
 		a = h.combine(b)
 	} else {
-		body, err := fs.ReadFile(h.fs, name)
+		body, err := readAsset(h.fs, name)
 		if err != nil {
 			return nil
 		}
@@ -136,7 +136,7 @@ func (h *staticHandler) asset(name string) *staticAsset {
 func (h *staticHandler) combine(b bundle) *staticAsset {
 	var buf bytes.Buffer
 	for _, name := range b.files {
-		body, err := fs.ReadFile(h.fs, name)
+		body, err := readAsset(h.fs, name)
 		if err != nil {
 			return nil
 		}
@@ -144,6 +144,14 @@ func (h *staticHandler) combine(b bundle) *staticAsset {
 		buf.WriteString(b.join)
 	}
 	return newAsset(buf.Bytes(), b.mime)
+}
+
+func readAsset(fsys fs.FS, name string) ([]byte, error) {
+	body, err := fs.ReadFile(fsys, name)
+	if err != nil {
+		return nil, err
+	}
+	return bytes.TrimPrefix(body, []byte{0xEF, 0xBB, 0xBF}), nil
 }
 
 func newAsset(body []byte, mime string) *staticAsset {

@@ -41,6 +41,7 @@ Versions follow the release tags on GitHub.
 - `hls.min.js` blocked every page even though only the player needs it; it loads on first play.
 - Config / Channels rows grew from 55px to 170px once their editors arrived, shifting the page while it filled; the row height is reserved up front.
 - The first channel build waited for the status poll before requesting config; the config request now starts in parallel.
+- Bundling the CSS turned every panel page white: `drmsonic.css` begins with a UTF-8 BOM, and inside a bundle that byte swallowed the `body { background: black }` rule. Leading BOMs are stripped when assets are read, and the file itself no longer carries one.
 
 ### Added
 - Default `admin` / `admin` on first install when no passwords exist (changeable under Users).

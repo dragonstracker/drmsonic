@@ -130,6 +130,28 @@ func TestStaticHandlerBundlesInOrder(t *testing.T) {
 	}
 }
 
+func TestBundleStripsByteOrderMark(t *testing.T) {
+	fses := staticTestFS()
+	fses["bootstrap.min.css"] = &fstest.MapFile{Data: []byte("a{color:red}")}
+	fses["bootstrap-select.min.css"] = &fstest.MapFile{Data: []byte("b{color:blue}")}
+	fses["drmsonic.css"] = &fstest.MapFile{Data: append([]byte{0xEF, 0xBB, 0xBF}, []byte("body{background-color:black}")...)}
+
+	h := newStaticHandler(fses)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/app.css", nil))
+
+	body := rec.Body.String()
+	if strings.ContainsRune(body, '\uFEFF') {
+		t.Fatal("bundle kept the byte order mark")
+	}
+	if !strings.Contains(body, "body{background-color:black}") {
+		t.Fatal("rule after the mark is missing")
+	}
+	if strings.Index(body, "a{color:red}") > strings.Index(body, "body{background-color:black}") {
+		t.Fatal("bundle order is wrong")
+	}
+}
+
 func TestGzipDynamicCompressesJSON(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
