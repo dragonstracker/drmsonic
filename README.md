@@ -178,6 +178,18 @@ The wipe deletes `/home/drmsonic` including `drmsonic.json`, so the installer re
 
 GitHub Actions artifacts (`actions/runs/.../artifacts/...`) are private to signed-in users and expire. The `dev` release assets are the same binaries and are public:
 
+```sh
+# binary only, already built for linux/amd64
+curl -fL -o /tmp/drmsonic https://github.com/dragonstracker/drmsonic/releases/download/dev/drmsonic-linux-amd64
+```
+
+One-off install from a local binary:
+
+```sh
+install -m 0755 /tmp/drmsonic /home/drmsonic/drmsonic
+systemctl restart drmsonic
+```
+
 Day two: `systemctl restart drmsonic`, `journalctl -u drmsonic -f`, `systemctl status drmsonic`.
 
 Publish a new release from this repo:
