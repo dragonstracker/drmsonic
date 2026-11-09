@@ -177,6 +177,7 @@ func New(opts Options, store *config.Store, mgr *state.Manager) (*Server, error)
 		stop:   make(chan struct{}),
 	}
 	s.routes()
+	go s.onDemandLoop()
 	return s, nil
 }
 

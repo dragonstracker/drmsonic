@@ -1,0 +1,131 @@
+.brand {
+	margin: 0;
+	line-height: 1.05;
+	letter-spacing: 0;
+}
+
+.btn-group {
+	flex-wrap: wrap;
+	gap: 2px;
+}
+
+.btn {
+	border-radius: 4px;
+	transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.btn-primary {
+	background-color: #1a4fd6;
+	border-color: #1a4fd6;
+}
+
+.btn-primary:hover {
+	background-color: #2f66ee;
+	border-color: #2f66ee;
+}
+
+.table-dark {
+	--bs-table-bg: #0b0b0b;
+	--bs-table-striped-bg: #101010;
+	--bs-table-hover-bg: #161616;
+}
+
+#streamsTable,
+#streamsTable tbody {
+	vertical-align: top;
+}
+
+#streamsTable thead th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	background-color: #000;
+	white-space: nowrap;
+	padding: 6px 4px;
+}
+
+#streamsTable tbody tr {
+	height: auto;
+}
+
+#streamsTable tbody td {
+	height: auto;
+	padding: 6px 4px;
+	vertical-align: top;
+}
+
+#streamsTable .flexname {
+	gap: 4px;
+	align-items: stretch;
+}
+
+#streamsTable .form-select,
+#streamsTable .form-control,
+#streamsTable .input-group-text {
+	height: 26px;
+	padding: 1px 6px;
+}
+
+#streamsTable textarea {
+	max-height: 96px;
+	min-width: 150px;
+}
+
+#streamsTable .form-check {
+	margin-bottom: 0;
+	min-height: 16px;
+}
+
+#streamsTable .form-check-input {
+	margin-top: 2px;
+}
+
+#streamsTable pre {
+	margin: 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+#streamsTable td:last-child {
+	min-width: 150px;
+	text-align: left;
+}
+
+.dataTables_wrapper .row {
+	margin: 0;
+}
+
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select {
+	background-color: #111;
+	color: #fff;
+	border: 1px solid #333;
+	border-radius: 4px;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+	color: #fff !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+	background: #1a4fd6 !important;
+	border-color: #1a4fd6 !important;
+	color: #fff !important;
+}
+
+#playerDiv {
+	border: 1px solid #222;
+	border-radius: 6px;
+	background-color: #050505;
+}
+
+#currentChannel {
+	font-weight: bold;
+	padding-bottom: 4px;
+}
+
+@media (max-width: 1200px) {
+	#streamsTable td:last-child {
+		min-width: 120px;
+	}
+}

@@ -188,27 +188,21 @@ func (s *Server) acGetConf(w http.ResponseWriter, req actionRequest) {
 		return
 	}
 	ids := requestedIDs(req)
-	if len(ids) == 0 {
-		http.Error(w, "no stream provided", http.StatusInternalServerError)
-		return
-	}
 	out := providerToMap(p, false)
 	streams := make([]map[string]any, 0, len(p.Streams))
-	for i := range p.Streams {
-		st := &p.Streams[i]
-		if !matchIDs(ids, st.Id) {
-			continue
+	if len(ids) > 0 {
+		for i := range p.Streams {
+			st := &p.Streams[i]
+			if !matchIDs(ids, st.Id) {
+				continue
+			}
+			streams = append(streams, map[string]any{
+				"Id":     st.Id,
+				"Stream": streamToMap(st),
+			})
 		}
-		streams = append(streams, map[string]any{
-			"Id":     st.Id,
-			"Stream": streamToMap(st),
-		})
 	}
 	out["Streams"] = streams
-	if len(streams) == 0 {
-		http.Error(w, "no stream provided", http.StatusInternalServerError)
-		return
-	}
 	s.renderJSON(w, out)
 }
 

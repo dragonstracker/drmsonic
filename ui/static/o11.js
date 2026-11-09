@@ -73,20 +73,41 @@ async function setPlayer(e, id) {
 	}
 	document.getElementById('currentChannel').style.border = '1px solid white';
 
-	if (player.canPlayType('application/vnd.apple.mpegurl') || src.endsWith(".mp4")) {
+	const nativeHls = player.canPlayType('application/vnd.apple.mpegurl') !== '';
+	const hlsSrc = src.includes('.m3u8');
+
+	if (src.endsWith('.mp4') || (hlsSrc && !Hls.isSupported() && nativeHls)) {
+		if (hls) {
+			hls.destroy()
+			hls = null
+		}
 		player.src = src;
-		player.play()
+		player.play().catch(function(){})
 	} else if (Hls.isSupported()) {
 		if (hls) {
 			hls.destroy()
 		}
 
-		hlsjsConfig = {"maxBufferSize": 0, "maxBufferLength": 30, "liveSyncDuration": 30, "liveMaxLatencyDuration": Infinity, "debug": true};
+		hlsjsConfig = {"maxBufferSize": 0, "maxBufferLength": 30, "liveSyncDurationCount": 3, "liveMaxLatencyDurationCount": 10, "manifestLoadingTimeOut": 20000, "manifestLoadingMaxRetry": 4, "levelLoadingMaxRetry": 4, "fragLoadingMaxRetry": 4, "debug": false};
 		hls = new Hls(hlsjsConfig);
 		hls.loadSource(src);
 		hls.attachMedia(video);
 		hls.on(Hls.Events.MANIFEST_PARSED,function() {
-			video.play();
+			video.play().catch(function(){})
+		});
+		hls.on(Hls.Events.ERROR,function(evt, data) {
+			if (!data.fatal) {
+				return
+			}
+			if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+				hls.startLoad()
+			} else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+				hls.recoverMediaError()
+			} else {
+				hls.destroy()
+				hls = null
+				showStatusWindow('playback error: ' + data.details)
+			}
 		});
 		hls.on(Hls.Events.AUDIO_TRACKS_UPDATED,function() {
 			if ($("#playerAudioSelect")) {
@@ -117,6 +138,8 @@ async function setPlayer(e, id) {
 			hls.subtitleTrack  = document.getElementById('playerSubtitlesSelect').selectedIndex
 			document.getElementById('trackselection').style.display = 'block';
 		});
+	} else {
+		showStatusWindow('HLS playback is not supported by this browser')
 	}
 
 	return false;

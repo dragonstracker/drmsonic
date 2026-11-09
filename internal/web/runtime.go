@@ -106,6 +106,52 @@ func (s *Server) stopAll() {
 	}
 }
 
+func (s *Server) onDemandLoop() {
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-s.stop:
+			return
+		case <-t.C:
+			s.sweepOnDemand()
+		}
+	}
+}
+
+func (s *Server) sweepOnDemand() {
+	for _, prov := range s.store.Providers() {
+		for i := range prov.Streams {
+			st := &prov.Streams[i]
+			if !st.OnDemand {
+				continue
+			}
+			ch := s.mgr.Get(prov.Id, st.Id)
+			if ch == nil || !ch.Running {
+				continue
+			}
+			if s.media.idle(prov.Id, st.Id) < onDemandIdle(prov) {
+				continue
+			}
+			s.stopChannel(prov.Id, st.Id)
+			s.media.drop(prov.Id, st.Id)
+			log.Printf("%s/%s: idle, stopped on demand stream", prov.Id, st.Id)
+		}
+	}
+}
+
+func onDemandIdle(prov *config.Provider) time.Duration {
+	secs := prov.PlaylistDuration
+	if secs <= 0 {
+		secs = 30
+	}
+	limit := time.Duration(secs) * time.Second
+	if limit < 20*time.Second {
+		limit = 20 * time.Second
+	}
+	return limit
+}
+
 func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *config.Stream, ch *state.Channel, key string) {
 	defer func() {
 		s.run.mu.Lock()
@@ -190,6 +236,9 @@ func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *confi
 			ch.Info = text
 		},
 		Error: func(text string) {
+			if ctx.Err() != nil {
+				return
+			}
 			ch.LastError = text
 			log.Printf("%s/%s: %s", prov.Id, st.Id, text)
 		},

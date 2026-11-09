@@ -200,8 +200,9 @@ func (s *Server) handleMasterPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-mpegurl")
+	s.media.touch(prov.Id, st.Id)
 	if err := s.ensureRunning(prov, st); err != nil {
-		http.Error(w, "#EXTM3U\n", http.StatusOK)
+		http.Error(w, "#EXTM3U\n", http.StatusServiceUnavailable)
 		return
 	}
 	bandwidth := 0
@@ -242,10 +243,12 @@ func (s *Server) handleMediaPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-mpegurl")
+	s.media.touch(prov.Id, st.Id)
 	if err := s.ensureRunning(prov, st); err != nil {
 		http.Error(w, "stream unavailable", http.StatusServiceUnavailable)
 		return
 	}
+	s.awaitSegments(r, prov, st, 2, 10*time.Second)
 	buf := s.segments(prov, st)
 	seq := buf.Seq
 	if len(buf.Items) > 0 {
@@ -273,9 +276,15 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	s.media.touch(prov.Id, st.Id)
+	if err := s.ensureRunning(prov, st); err != nil {
+		http.Error(w, "stream unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	if ch := s.mgr.Get(prov.Id, st.Id); ch != nil && ch.Running {
 		ch.Readers++
 	}
+	s.awaitSegments(r, prov, st, 1, 5*time.Second)
 	data, ok := s.segmentData(prov, st, name)
 	if !ok {
 		http.NotFound(w, r)
@@ -284,6 +293,23 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "video/mp2t")
 	w.Header().Set("Content-Length", fmt.Sprint(len(data)))
 	w.Write(data)
+}
+
+func (s *Server) awaitSegments(r *http.Request, prov *config.Provider, st *config.Stream, want int, limit time.Duration) {
+	if want < 1 {
+		want = 1
+	}
+	deadline := time.Now().Add(limit)
+	for len(s.segments(prov, st).Items) < want {
+		if time.Now().After(deadline) || r.Context().Err() != nil {
+			return
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
 }
 
 func (s *Server) streamFromPath(w http.ResponseWriter, r *http.Request) (*config.Provider, *config.Stream) {

@@ -2,6 +2,7 @@ package web
 
 import (
 	"sync"
+	"time"
 
 	"drmsonic/internal/config"
 )
@@ -20,12 +21,16 @@ type SegBuffer struct {
 }
 
 type mediaStore struct {
-	mu   sync.RWMutex
-	bufs map[string]*SegBuffer
+	mu     sync.RWMutex
+	bufs   map[string]*SegBuffer
+	access map[string]time.Time
 }
 
 func newMediaStore() *mediaStore {
-	return &mediaStore{bufs: make(map[string]*SegBuffer)}
+	return &mediaStore{
+		bufs:   make(map[string]*SegBuffer),
+		access: make(map[string]time.Time),
+	}
 }
 
 func mediaKey(p, s string) string {
@@ -43,6 +48,9 @@ func (m *mediaStore) push(p, s string, data []byte, dur float64, window int) Seg
 	if !ok {
 		b = &SegBuffer{Target: 2}
 		m.bufs[k] = b
+	}
+	if _, seen := m.access[k]; !seen {
+		m.access[k] = time.Now()
 	}
 	seq := b.Seq
 	seg := Segment{Seq: seq, Name: segmentName(seq), Duration: dur, Data: data}
@@ -93,10 +101,28 @@ func (m *mediaStore) snapshot(p, s string) SegBuffer {
 	return out
 }
 
+func (m *mediaStore) touch(p, s string) {
+	m.mu.Lock()
+	m.access[mediaKey(p, s)] = time.Now()
+	m.mu.Unlock()
+}
+
+func (m *mediaStore) idle(p, s string) time.Duration {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	at, ok := m.access[mediaKey(p, s)]
+	if !ok {
+		return 0
+	}
+	return time.Since(at)
+}
+
 func (m *mediaStore) drop(p, s string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	delete(m.bufs, mediaKey(p, s))
+	k := mediaKey(p, s)
+	delete(m.bufs, k)
+	delete(m.access, k)
 }
 
 func segmentName(seq uint64) string {
