@@ -52,6 +52,7 @@ Versions follow the release tags on GitHub.
 - `dev` release `install.sh` defaults `DRMSONIC_TAG` to `dev` (avoids accidental `latest` / v1.1.x installs).
 - Playlist path `/{username}/{password}/…` (app1.conf / m3u / streams) for IPTV clients.
 - **Open panel without login** toggle on Users (`NoAuth`).
+- Per-user **Playlist** toggle (`NoPlaylist`): a row can keep playlist access without panel login, or lose playlists while keeping Web UI access.
 - **All qualities** remuxes each video track into an ABR master (`v/<id>/stream.m3u8`).
 
 ### Changed
@@ -71,6 +72,10 @@ Versions follow the release tags on GitHub.
 - Users row actions now use event delegation (`data-user-action`), so no Go value is ever spliced into a JS identifier.
 - Users password / providers / NoAuth save crashed when the providers select returned null.
 - Open panel without login never persisted when an earlier per-row update failed.
+- A user without **Web Access** could still get a panel session from `/login` and then hit raw `forbidden` on every page. Login is refused with *This account is for playlist access only*, while their `/{user}/{pass}/…` playlists keep working.
+- Playlist and stream URLs answered unauthenticated clients with the HTML login page; they now return `401`, so players stop instead of chasing a redirect.
+- A session whose user lost **Web Access** stayed on `forbidden`; the panel now sends it through `/logout`.
+- SAVE USERS applied **Open panel without login** before validating the rows, so a rejected save could flip the toggle in memory.
 - Panel assets were served without cache headers, so a stale `drmsonic.js` could survive an upgrade; static files now send `Cache-Control: no-cache`.
 - A segment request for a sequence already rotated out of the buffer used to block for five seconds before answering 404, stalling clients that fell behind; it now 404s immediately, while the live edge still waits for the next fragment.
 - DASH streams emitted audio-only fragments whenever the video source briefly had no new segment, which churned the playlist and froze video with audio still running; the pipeline now waits for the next video segment.

@@ -462,6 +462,7 @@ function collectUsersFromForm() {
 			Network: $('#network' + n).val(),
 			IsAdmin: document.getElementById('isadmin' + n).checked,
 			HasWebAccess: document.getElementById('haswebaccess' + n).checked,
+			NoPlaylist: !document.getElementById('playlist' + n).checked,
 			ProviderIds: picked ? picked : []
 		});
 		n++;

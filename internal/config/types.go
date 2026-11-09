@@ -256,6 +256,11 @@ type User struct {
 	Network      string   `json:"Network"`
 	IsAdmin      bool     `json:"IsAdmin"`
 	HasWebAccess bool     `json:"HasWebAccess"`
+	NoPlaylist   bool     `json:"NoPlaylist,omitempty"`
+}
+
+func (u User) CanUsePlaylist() bool {
+	return !u.NoPlaylist
 }
 
 func (u User) NetworkList() []string {

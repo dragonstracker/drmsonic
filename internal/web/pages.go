@@ -202,6 +202,10 @@ func (s *Server) streamCredPrefix(r *http.Request) string {
 
 func (s *Server) handleApp1(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if !s.canUsePlaylist(r) {
+		http.Error(w, "# drmsonic: playlist access disabled for this account", http.StatusForbidden)
+		return
+	}
 	host := strings.TrimPrefix(strings.TrimPrefix(s.baseFor(r), "http://"), "https://")
 	prefix := s.streamCredPrefix(r)
 	var b strings.Builder
@@ -225,6 +229,10 @@ func (s *Server) handleApp1(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleM3U(scope string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-mpegurl")
+		if !s.canUsePlaylist(r) {
+			http.Error(w, "# drmsonic: playlist access disabled for this account", http.StatusForbidden)
+			return
+		}
 		prefix := s.streamCredPrefix(r)
 		var b strings.Builder
 		b.WriteString("#EXTM3U x-tvg-url=\"\"\n\n")
@@ -469,6 +477,10 @@ func segmentSeq(name string) (uint64, bool) {
 }
 
 func (s *Server) streamFromPath(w http.ResponseWriter, r *http.Request) (*config.Provider, *config.Stream) {
+	if !s.canUsePlaylist(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return nil, nil
+	}
 	pid := r.PathValue("provider")
 	sid := r.PathValue("stream")
 	if !s.canAccessProvider(r, pid) {

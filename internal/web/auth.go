@@ -65,12 +65,27 @@ func (s *Server) authWrap(next http.Handler) http.Handler {
 			})))
 			return
 		}
-		if wantsHTML(r) {
+		if wantsHTML(r) && !isMediaPath(r.URL.Path) {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	})
+}
+
+func isMediaPath(path string) bool {
+	parts := splitPath(path)
+	if len(parts) == 0 {
+		return false
+	}
+	if isUserPassPath(parts) || parts[0] == "t" {
+		return true
+	}
+	switch parts[0] {
+	case "stream", "app1.conf", "playlist.m3u", "live.m3u", "event.m3u", "replay.m3u":
+		return true
+	}
+	return false
 }
 
 func wantsHTML(r *http.Request) bool {
@@ -185,6 +200,16 @@ func (s *Server) currentUser(r *http.Request) (config.User, bool) {
 func (s *Server) isAdmin(r *http.Request) bool {
 	u, ok := s.currentUser(r)
 	return ok && u.IsAdmin
+}
+
+func (s *Server) canUsePanel(r *http.Request) bool {
+	u, ok := s.currentUser(r)
+	return ok && (u.HasWebAccess || u.IsAdmin)
+}
+
+func (s *Server) canUsePlaylist(r *http.Request) bool {
+	u, ok := s.currentUser(r)
+	return ok && u.CanUsePlaylist()
 }
 
 func (s *Server) canAccessProvider(r *http.Request, providerID string) bool {
@@ -411,12 +436,15 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 
 func (s *Server) requirePanel(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		u, ok := s.currentUser(r)
-		if !ok || (!u.HasWebAccess && !u.IsAdmin) {
-			http.Error(w, "forbidden", http.StatusForbidden)
+		if s.canUsePanel(r) {
+			next(w, r)
 			return
 		}
-		next(w, r)
+		if wantsHTML(r) {
+			http.Redirect(w, r, "/logout", http.StatusFound)
+			return
+		}
+		http.Error(w, "forbidden", http.StatusForbidden)
 	}
 }
 
@@ -460,6 +488,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		s.throttle.record(ip)
 		s.renderLogin(w, "Invalid username or password.")
+		return
+	}
+	if !u.HasWebAccess && !u.IsAdmin {
+		s.renderLogin(w, "This account is for playlist access only.")
 		return
 	}
 	s.throttle.clear(ip)

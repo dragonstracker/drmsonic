@@ -702,12 +702,17 @@ func (s *Server) acAddUser(w http.ResponseWriter, req actionRequest) {
 	if v, ok := src["HasWebAccess"]; ok {
 		hasWeb = boolOf(v)
 	}
+	noPlaylist := false
+	if v, ok := src["NoPlaylist"]; ok {
+		noPlaylist = boolOf(v)
+	}
 	users = append(users, config.User{
 		Username:     name,
 		Password:     pass,
 		StreamToken:  tok,
 		IsAdmin:      isAdmin,
 		HasWebAccess: hasWeb,
+		NoPlaylist:   noPlaylist,
 		ProviderIds:  stringSlice(mapGet(src, "ProviderIds")),
 	})
 	s.store.SetUsers(users)
@@ -735,6 +740,9 @@ func applyUserFields(u *config.User, src map[string]any) {
 	}
 	if v, ok := src["HasWebAccess"]; ok {
 		u.HasWebAccess = boolOf(v)
+	}
+	if v, ok := src["NoPlaylist"]; ok {
+		u.NoPlaylist = boolOf(v)
 	}
 	if v, ok := src["ProviderIds"]; ok {
 		u.ProviderIds = stringSlice(v)
@@ -774,9 +782,6 @@ func (s *Server) acUpdateUser(w http.ResponseWriter, req actionRequest) {
 }
 
 func (s *Server) acSaveUsers(w http.ResponseWriter, req actionRequest) {
-	if v, ok := req.Raw["NoAuth"]; ok {
-		s.store.SetNoAuth(boolOf(v))
-	}
 	users := s.store.Users()
 	index := make(map[string]int, len(users))
 	for i := range users {
@@ -793,6 +798,9 @@ func (s *Server) acSaveUsers(w http.ResponseWriter, req actionRequest) {
 			return
 		}
 		applyUserFields(&users[i], src)
+	}
+	if v, ok := req.Raw["NoAuth"]; ok {
+		s.store.SetNoAuth(boolOf(v))
 	}
 	s.store.SetUsers(users)
 	if err := s.store.SaveUsers(); err != nil {

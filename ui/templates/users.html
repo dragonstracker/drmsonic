@@ -64,6 +64,10 @@
 							<input class="form-check-input" type="checkbox" id="haswebaccess{{$n}}" {{ if $s.HasWebAccess }} checked {{ end }}/>
 							<label class="form-check-label" for="haswebaccess{{$n}}">Web Access</label>
 						</div>
+						<div class="form-check" id="playlistDiv{{$n}}">
+							<input class="form-check-input" type="checkbox" id="playlist{{$n}}" {{ if $s.CanUsePlaylist }} checked {{ end }}/>
+							<label class="form-check-label" for="playlist{{$n}}">Playlist</label>
+						</div>
 					</TD>
 					<TD style='text-align:center; vertical-align:middle; width:100px'>
 						<div style="display: flex;">
@@ -72,7 +76,9 @@
 									PLAYLIST
 								</button>
 								<ul class="dropdown-menu">
-									{{ if $s.Password }}
+									{{ if not $s.CanUsePlaylist }}
+									<li><span class="dropdown-item disabled">Playlist access disabled</span></li>
+									{{ else if $s.Password }}
 									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/playlist.m3u">Full</a></li>
 									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/live.m3u">Live</a></li>
 									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/event.m3u">Events</a></li>

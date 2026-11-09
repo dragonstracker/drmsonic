@@ -130,16 +130,107 @@ func TestNoAuthOpensPlaylists(t *testing.T) {
 	}
 }
 
-func TestNoAuthOffRedirectsPlaylists(t *testing.T) {
+func TestNoAuthOffRejectsPlaylists(t *testing.T) {
 	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, nil, sampleProvider("channels"))
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/app1.conf", nil)
 	req.Host = "example.test:7779"
 	s.Handler().ServeHTTP(rr, req)
-	if rr.Code != http.StatusFound || rr.Header().Get("Location") != "/login" {
-		t.Fatalf("status %d location %s", rr.Code, rr.Header().Get("Location"))
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("want 401 got %d", rr.Code)
 	}
 }
+
+func TestPlaylistOnlyUserCannotLogin(t *testing.T) {
+	users := []config.User{{
+		Username: "mahdes", Password: "pw", StreamToken: config.NewStreamToken(),
+		HasWebAccess: false, ProviderIds: []string{"channels"},
+	}}
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, users, sampleProvider("channels"))
+	h := s.Handler()
+
+	rr := httptest.NewRecorder()
+	form := strings.NewReader("username=mahdes&password=pw")
+	req := httptest.NewRequest(http.MethodPost, "/login", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	h.ServeHTTP(rr, req)
+	if rr.Code != 200 || !strings.Contains(rr.Body.String(), "playlist access only") {
+		t.Fatalf("want playlist-only error got %d %s", rr.Code, rr.Body.String())
+	}
+	if len(rr.Result().Cookies()) != 0 {
+		t.Fatal("session created for playlist-only user")
+	}
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/mahdes/pw/app1.conf", nil)
+	req.Host = "example.test:7779"
+	h.ServeHTTP(rr, req)
+	if rr.Code != 200 {
+		t.Fatalf("playlist status %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "/mahdes/pw/stream/channels/channel1/master.m3u8") {
+		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+}
+
+func TestSessionWithoutWebAccessLeavesPanel(t *testing.T) {
+	users := []config.User{{Username: "bob", Password: "pw", HasWebAccess: false, ProviderIds: []string{"channels"}}}
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, users, sampleProvider("channels"))
+	id, _ := s.sessions.create("bob")
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", "text/html")
+	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: id})
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusFound || rr.Header().Get("Location") != "/logout" {
+		t.Fatalf("want logout redirect got %d %s", rr.Code, rr.Header().Get("Location"))
+	}
+}
+
+func TestNoPlaylistRevokesMedia(t *testing.T) {
+	users := []config.User{{
+		Username: "bob", Password: "pw", StreamToken: config.NewStreamToken(),
+		HasWebAccess: true, NoPlaylist: true, ProviderIds: []string{"channels"},
+	}}
+	s := testServer(t, Options{SessionSecret: "x"}, users, sampleProvider("channels"))
+	h := s.Handler()
+
+	for _, path := range []string{
+		"/bob/pw/app1.conf",
+		"/bob/pw/playlist.m3u",
+		"/t/" + users[0].StreamToken + "/playlist.m3u",
+		"/bob/pw/stream/channels/channel1/master.m3u8",
+	} {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Host = "host:7779"
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("%s want 403 got %d", path, rr.Code)
+		}
+	}
+}
+
+func TestSaveUsersKeepsNoAuthOnUnknownUser(t *testing.T) {
+	users := []config.User{{Username: "bob", Password: "pw", HasWebAccess: true, IsAdmin: true}}
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, users, sampleProvider("channels"))
+	body := `{"Action":"saveusers","NoAuth":true,"Users":[{"Username":"ghost"}]}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/action", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://example.test")
+	req.Host = "example.test"
+	req.SetBasicAuth("admin", "secret")
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500 got %d", rr.Code)
+	}
+	if s.store.NoAuth() {
+		t.Fatal("NoAuth changed by a failed save")
+	}
+}
+
 func TestLoginAndTokenPlaylist(t *testing.T) {
 	tok := config.NewStreamToken()
 	users := []config.User{{
