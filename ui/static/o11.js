@@ -14,7 +14,7 @@ function getId(id) {
 }
 
 function initPlayer() {
-	document.getElementById('playerDiv').style.display = 'block';
+	document.getElementById('playerDiv').style.display = 'none';
 
 	playerAudioSelect.onchange = playerAudioSelectOnchange;
 	playerSubtitlesSelect.onchange = playerSubtitlesSelectOnchange;
@@ -72,6 +72,7 @@ async function setPlayer(e, id) {
 		document.getElementById('currentChannel').innerText = id;
 	}
 	document.getElementById('currentChannel').style.border = '1px solid white';
+	document.getElementById('playerDiv').style.display = 'block';
 
 	const nativeHls = player.canPlayType('application/vnd.apple.mpegurl') !== '';
 	const hlsSrc = src.includes('.m3u8');
@@ -2049,8 +2050,6 @@ async function updateStreams(table, init) {
 				table.rows({ page: 'current' }).every( function (rowIdx, tableLoop, rowLoop ) {
 					id = /(_[^_]*_[^"]*)/.exec(table.rows().data()[rowIdx][2])[1]
 
-					table.row({row:rowIdx}).style = "height: 30px";
-
 					if (streamtoupdate.Id == getStreamId(id)) {
 						if (init) {
 							table.cell({row:rowIdx, column:0}).data('<input class="form-check-input" type="checkbox" id="checked' + id + '"/>');
@@ -2184,9 +2183,9 @@ async function updateStreams(table, init) {
 							</div>
 							<br>`);
 
-							content=`<div style="overflow-y: scroll; height: 65%" id="checkboxes` + id + `">
+							content=`<div id="checkboxes` + id + `">
 							<div class="form-check" title="Autostart stream on startup.">
-								<input class="form-check-input" bdisabled type="checkbox" id="autostart` + id + `" />
+								<input class="form-check-input" type="checkbox" id="autostart` + id + `" />
 								<label class="form-check-label" for="autostart` + id + `">Autostart</label>
 							</div>
 							<div class="form-check" title="Start stream only when requested.">
@@ -2217,7 +2216,7 @@ async function updateStreams(table, init) {
 								<input class="form-check-input" type="checkbox" id="recordevent` + id + `" />
 								<label class="form-check-label" for="recordevent` + id + `">Record event</label>
 							</div>
-							<div class="form-check" title=""Ignore channels/events updates for this streams.>
+							<div class="form-check" title="Ignore channels/events updates for this stream.">
 								<input class="form-check-input" type="checkbox" id="ignoreupdate` + id + `" />
 								<label class="form-check-label" for="ignoreUpdate` + id + `">Ignore update</label>
 							</div>

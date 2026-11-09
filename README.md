@@ -121,6 +121,29 @@ docker compose logs -f
 
 The image is a two stage build: `golang:1.22-alpine` compiles a static binary, `alpine` runs it as an unprivileged user. `providers/` is a bind mount so panel edits survive container rebuilds. The published port is bound to `127.0.0.1` so the panel and playlists are not exposed on the LAN unless you change the mapping.
 
+### Fresh VPS, one command
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dragonstracker/drmsonic/main/drmsonic/deploy/install.sh | sudo bash
+```
+
+The script installs Docker when it is missing, clones or updates the repo into `/opt/drmsonic`, builds the image, starts a `--restart unless-stopped` container on port `1234`, registers a `drmsonic.service` systemd unit and opens the port with `ufw` when present. Overrides:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DRMSONIC_REPO` | GitHub URL | clone source, use a token URL for a private repo |
+| `DRMSONIC_REF` | `main` | branch or tag to deploy |
+| `DRMSONIC_DIR` | `/opt/drmsonic` | install path |
+| `DRMSONIC_PORT` | `1234` | public port |
+| `DRMSONIC_CONTAINER` | `drmsonic` | container name |
+
+```sh
+DRMSONIC_PORT=8080 curl -fsSL .../install.sh | sudo -E bash
+```
+
+Day two: `systemctl restart drmsonic`, `docker logs -f drmsonic`, `systemctl status drmsonic`.
+
+
 ## Quick start
 
 1. Open the panel, go to **Providers** and create a provider (or edit `providers/example.json`).

@@ -1,7 +1,77 @@
+.topbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: 18px;
+	padding: 10px 20px 14px;
+	border-bottom: 1px solid #1b1b1b;
+	margin-bottom: 14px;
+}
+
+.brandwrap {
+	flex: 0 0 auto;
+}
+
 .brand {
 	margin: 0;
 	line-height: 1.05;
-	letter-spacing: 0;
+	color: #f2f2f2;
+}
+
+.tagline {
+	margin-top: 2px;
+	color: #9aa4b2;
+	letter-spacing: .04em;
+}
+
+.mainnav {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	flex: 1 1 420px;
+	padding-top: 26px;
+}
+
+.mainnav .btn {
+	min-width: 92px;
+	border-radius: 4px;
+}
+
+.mainnav .dropdown-toggle {
+	min-width: 92px;
+}
+
+.loginbadge {
+	margin-left: auto;
+	align-self: flex-start;
+	font-weight: 400;
+}
+
+.playerwrap {
+	margin-left: auto;
+	flex: 0 0 auto;
+	display: none;
+	padding: 6px 8px 8px;
+	border: 1px solid #1f1f1f;
+	border-radius: 6px;
+	background-color: #050505;
+}
+
+#currentChannel {
+	text-align: center;
+	font-weight: bold;
+	padding-bottom: 4px;
+}
+
+#trackselection {
+	display: flex;
+	gap: 6px;
+	margin-top: 6px;
+}
+
+#trackselection select {
+	flex: 1 1 0;
 }
 
 .btn-group {
@@ -30,8 +100,16 @@
 	--bs-table-hover-bg: #161616;
 }
 
-#streamsTable,
-#streamsTable tbody {
+.table-scroll {
+	overflow-x: auto;
+	overflow-y: hidden;
+	border: 1px solid #161616;
+	border-radius: 6px;
+}
+
+#streamsTable {
+	table-layout: fixed;
+	width: 1360px;
 	vertical-align: top;
 }
 
@@ -41,43 +119,131 @@
 	z-index: 2;
 	background-color: #000;
 	white-space: nowrap;
-	padding: 6px 4px;
+	padding: 6px 6px;
+	border-bottom: 1px solid #262626;
 }
 
 #streamsTable tbody tr {
 	height: auto;
+	border-top: 1px solid #1d1d1d;
 }
 
 #streamsTable tbody td {
 	height: auto;
-	padding: 6px 4px;
+	padding: 8px 6px;
 	vertical-align: top;
+	text-align: left;
 }
 
-#streamsTable .flexname {
-	gap: 4px;
-	align-items: stretch;
+#streamsTable input:not([type="checkbox"]):not(.btn),
+#streamsTable select,
+#streamsTable textarea {
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
 }
 
-#streamsTable .form-select,
-#streamsTable .form-control,
-#streamsTable .input-group-text {
-	height: 26px;
-	padding: 1px 6px;
+#streamsTable .btn,
+#streamsTable input.btn {
+	width: auto;
+	white-space: nowrap;
 }
 
 #streamsTable textarea {
+	min-width: 0;
 	max-height: 96px;
-	min-width: 150px;
+	resize: vertical;
+}
+
+#streamsTable .input-group {
+	width: 100%;
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: flex-start;
+	gap: 4px;
+	margin-bottom: 4px;
+}
+
+#streamsTable .input-group-prepend {
+	display: block;
+	width: auto;
+}
+
+#streamsTable .input-group-prepend.center-block {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	flex: 1 1 auto;
+	width: auto;
+	margin: 0;
+}
+
+#streamsTable .input-group > .form-control {
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+#streamsTable .input-group-text {
+	flex: 0 0 auto;
+	width: auto;
+	height: 26px;
+	padding: 1px 8px;
+}
+
+#streamsTable .center-block {
+	display: block;
+	width: 100%;
+	margin: 0;
+}
+
+#streamsTable .container {
+	max-width: none;
+	padding: 0;
+	margin: 0;
+}
+
+#streamsTable .flexname {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	width: 100%;
+	align-items: stretch;
+}
+
+#streamsTable .frame {
+	width: 100% !important;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	border: 1px solid #262626;
+	border-radius: 4px;
+	padding: 4px 8px;
+	margin-left: 0;
+	margin-right: 0;
+}
+
+#streamsTable .frame img {
+	max-height: 46px;
 }
 
 #streamsTable .form-check {
-	margin-bottom: 0;
-	min-height: 16px;
+	margin-bottom: 1px;
+	min-height: 17px;
+	padding-left: 1.6em;
 }
 
 #streamsTable .form-check-input {
 	margin-top: 2px;
+	margin-left: -1.6em;
+}
+
+#streamsTable .form-check-label {
+	white-space: nowrap;
+}
+
+#streamsTable div[id^="checkboxes"] {
+	overflow: visible !important;
+	height: auto !important;
 }
 
 #streamsTable pre {
@@ -86,9 +252,20 @@
 	word-break: break-word;
 }
 
-#streamsTable td:last-child {
-	min-width: 150px;
-	text-align: left;
+#streamsTable hr {
+	margin: 6px 0;
+	border-color: #1f1f1f;
+}
+
+.bootstrap-select {
+	width: 100% !important;
+}
+
+.bootstrap-select > .dropdown-toggle {
+	width: 100% !important;
+	height: 26px;
+	padding: 1px 8px;
+	font-size: 12px;
 }
 
 .dataTables_wrapper .row {
@@ -113,19 +290,52 @@
 	color: #fff !important;
 }
 
-#playerDiv {
-	border: 1px solid #222;
-	border-radius: 6px;
-	background-color: #050505;
+.providergrid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	padding: 0 20px;
 }
 
-#currentChannel {
+.providertile {
+	width: 160px;
+	padding: 12px 8px 10px;
+	border: 1px solid #1d1d1d;
+	border-radius: 8px;
+	background-color: #0a0a0a;
+	text-align: center;
+}
+
+.providertile a {
+	display: block;
+}
+
+.providertile img {
+	width: 100px;
+	height: 100px;
+	object-fit: contain;
+}
+
+.providertile p {
+	margin: 0 0 8px;
 	font-weight: bold;
-	padding-bottom: 4px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-@media (max-width: 1200px) {
-	#streamsTable td:last-child {
-		min-width: 120px;
+@media (max-width: 900px) {
+	.mainnav {
+		padding-top: 0;
+	}
+
+	.playerwrap {
+		margin-left: 0;
+		width: 100%;
+	}
+
+	.playerwrap video {
+		width: 100%;
+		height: auto;
 	}
 }

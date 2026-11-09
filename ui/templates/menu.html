@@ -1,28 +1,26 @@
 {{ $mp := .MenuProvider }}
-<div class="badge bg-primary" style="float: right; margin-right: 20px; margin-top: 10px; margin-bottom: -40px">Logged as {{ .LoggedUser }}</div>
-<div style="display:inline-block;">
-	<div style="float: left; margin-top: 10px; margin-left: 20px; margin-right: 70px;">
+<header class="topbar">
+	<div class="brandwrap">
 		<pre class="brand">
     ____  ____  __  ________ ____  _   ____________
    / __ \/ __ \/  |/  / ___// __ \/ | / /  _/ ____/
   / / / /_/ / /|_/ /\__ \/ / / /  |/ // // /     
  / /_/ / _, _/ /  / /___/ / /_/ / /|  // // /___   
 /_____/_/ |_/_/  /_//____/\____/_/ |_/___/\____/   
+</pre>
+		<div class="tagline"><b>drmsonic</b> {{ .Tag }}</div>
+	</div>
 
-<b>drmsonic</b> {{ .Tag }}</pre></div>
-	<div class="btn-group" role="group" style="margin-top:50px; margin-right: 100px">
-		<a id="providersbutton" href="providers" class="btn btn-primary" style="width:100px;">Providers</a>
-		<a id="statusbutton" href="status/{{ $mp }}" class="btn btn-primary" style="width:100px;">Streams</a>
-		<a id="eventsbutton" href="events/{{ $mp }}" class="btn btn-primary" style="width:100px;">Events</a>
-		{{ if .IsAdmin }}<a id="monitoringbutton" href="monitoring" class="btn btn-primary" style="width:100px;">Monitoring</a>{{ end }}
-		{{ if .IsAdmin }}<a id="configbutton" href="config/{{ $mp }}" class="btn btn-primary" style="width:100px;">Config</a>{{ end }}
-		{{ if .IsAdmin }}<a id="usersbutton" href="users" class="btn btn-primary" style="width:100px;">Users</a>{{ end }}
-		<a id="recbutton" href="rec" class="btn btn-primary" style="width:100px;">Recordings</a>
-		&nbsp;&nbsp;&nbsp;&nbsp;
+	<nav class="mainnav">
+		<a id="providersbutton" href="providers" class="btn btn-primary">Providers</a>
+		<a id="statusbutton" href="status/{{ $mp }}" class="btn btn-primary">Streams</a>
+		<a id="eventsbutton" href="events/{{ $mp }}" class="btn btn-primary">Events</a>
+		{{ if .IsAdmin }}<a id="monitoringbutton" href="monitoring" class="btn btn-primary">Monitoring</a>{{ end }}
+		{{ if .IsAdmin }}<a id="configbutton" href="config/{{ $mp }}" class="btn btn-primary">Config</a>{{ end }}
+		{{ if .IsAdmin }}<a id="usersbutton" href="users" class="btn btn-primary">Users</a>{{ end }}
+		<a id="recbutton" href="rec" class="btn btn-primary">Recordings</a>
 		<div class="dropdown">
-			<button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-				Playlist
-			</button>
+			<button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Playlist</button>
 			<ul class="dropdown-menu">
 				<li><a class="dropdown-item" href="playlist.m3u">Full</a></li>
 				<li><a class="dropdown-item" href="live.m3u">Live</a></li>
@@ -31,19 +29,16 @@
 				<li><a class="dropdown-item" href="app1.conf">App1</a></li>
 			</ul>
 		</div>
-		{{ if .IsAdmin }}&nbsp;&nbsp;&nbsp;&nbsp;<a id="helpbutton" href="help" class="btn btn-primary" style="width:60px;">Help</a>{{ end }}
-	</div>
-	<div id="playerDiv" style="float: right; margin-top: 10px; display: none; margin-left: -50px;">
-		<div class="col-sm" style="padding: 20px;">
-			<div id="currentChannel" style="text-align:center;">&nbsp;</div>
-			<div><video width="462" height="260" controls id="player"></video></div>
-			<div id="trackselection" style="display:inline-block; display: none">
-				<select id="playerAudioSelect">
-				</select>
-				<select id="playerSubtitlesSelect">
-				</select>
-			</div>
+		{{ if .IsAdmin }}<a id="helpbutton" href="help" class="btn btn-primary">Help</a>{{ end }}
+		<span class="badge bg-primary loginbadge">Logged as {{ .LoggedUser }}</span>
+	</nav>
+
+	<div id="playerDiv" class="playerwrap">
+		<div id="currentChannel">&nbsp;</div>
+		<video width="462" height="260" controls id="player"></video>
+		<div id="trackselection" style="display: none">
+			<select id="playerAudioSelect"></select>
+			<select id="playerSubtitlesSelect"></select>
 		</div>
 	</div>
-</div>
-<br>
+</header>

@@ -4,7 +4,7 @@
 		{{template "menu.html" .}}
 		{{ if .Providers }}
 		<br>
-		<div style="display: flex; margin-top: -100px;">
+		<div style="display: flex; padding: 0 20px;">
 			<select style='text-align:center; vertical-align:middle; font-weight: bold; width: 335px; height: 30px' id="providerSelection" >
 				{{range $n, $g := .Providers}}
 				<option value="{{$g.Id}}">{{$g.Name}}</option>
