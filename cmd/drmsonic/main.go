@@ -15,7 +15,7 @@ import (
 
 func main() {
 	var (
-		port        = flag.Int("p", 1234, "Http port to listen to.")
+		port        = flag.Int("p", 7779, "Http port to listen to.")
 		bind        = flag.String("b", "0.0.0.0", "Http bind adress.")
 		baseURL     = flag.String("baseurl", "", "Http base URL.")
 		providers   = flag.String("providers", "providers", "Providers path, default is 'providers/'.")

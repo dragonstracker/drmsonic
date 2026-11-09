@@ -1,3 +1,2 @@
 #!/bin/sh
-set -e
-exec ./bin/drmsonic -p 1234 -b 0.0.0.0 -providers providers -c drmsonic.json "$@"
+exec ./bin/drmsonic -p 7779 -b 0.0.0.0 -providers providers -c drmsonic.json "$@"

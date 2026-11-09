@@ -14,7 +14,7 @@ function getId(id) {
 }
 
 function initPlayer() {
-	document.getElementById('playerDiv').style.display = 'none';
+	document.getElementById('playerDiv').style.display = 'block';
 
 	playerAudioSelect.onchange = playerAudioSelectOnchange;
 	playerSubtitlesSelect.onchange = playerSubtitlesSelectOnchange;
@@ -72,7 +72,6 @@ async function setPlayer(e, id) {
 		document.getElementById('currentChannel').innerText = id;
 	}
 	document.getElementById('currentChannel').style.border = '1px solid white';
-	document.getElementById('playerDiv').style.display = 'block';
 
 	const nativeHls = player.canPlayType('application/vnd.apple.mpegurl') !== '';
 	const hlsSrc = src.includes('.m3u8');

@@ -79,14 +79,14 @@ go test ./...
 ## Run
 
 ```sh
-./bin/drmsonic -p 1234 -b 0.0.0.0 -providers providers -c drmsonic.json
+./bin/drmsonic -p 7779 -b 0.0.0.0 -providers providers -c drmsonic.json
 ```
 
-Open `http://127.0.0.1:1234/`.
+Open `http://127.0.0.1:7779/`.
 
 | flag | default | meaning |
 |------|---------|---------|
-| `-p` | `1234` | HTTP port |
+| `-p` | `7779` | HTTP port |
 | `-b` | `0.0.0.0` | bind address |
 | `-baseurl` | request host | public URL written into playlists |
 | `-providers` | `providers` | providers directory |
@@ -107,9 +107,9 @@ Open `http://127.0.0.1:1234/`.
 ```sh
 docker build -t drmsonic:latest .
 docker run -d --name drmsonic --restart unless-stopped \
-  -p 127.0.0.1:1234:1234 \
+  -p 7779:7779 \
   -v "$PWD/providers:/app/providers" \
-  drmsonic:latest -p 1234 -b 0.0.0.0 -providers providers -v 1
+  drmsonic:latest -p 7779 -b 0.0.0.0 -providers providers -v 1
 ```
 
 Or with Compose:
@@ -119,29 +119,39 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-The image is a two stage build: `golang:1.22-alpine` compiles a static binary, `alpine` runs it as an unprivileged user. `providers/` is a bind mount so panel edits survive container rebuilds. The published port is bound to `127.0.0.1` so the panel and playlists are not exposed on the LAN unless you change the mapping.
+### Fresh VPS, one command (binary, like o11)
 
-### Fresh VPS, one command
+Every `v*` git tag publishes Linux amd64/arm64 + Windows binaries into GitHub Releases. Install on a clean VPS:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dragonstracker/drmsonic/main/drmsonic/deploy/install.sh | sudo bash
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo bash
 ```
 
-The script installs Docker when it is missing, clones or updates the repo into `/opt/drmsonic`, builds the image, starts a `--restart unless-stopped` container on port `1234`, registers a `drmsonic.service` systemd unit and opens the port with `ufw` when present. Overrides:
+That downloads the matching binary into `/home/drmsonic`, writes a systemd unit, opens port `7779`, and starts the service. Same shape as the o11 one-liner, without cloning source or installing a compiler.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DRMSONIC_REPO` | GitHub URL | clone source, use a token URL for a private repo |
-| `DRMSONIC_REF` | `main` | branch or tag to deploy |
-| `DRMSONIC_DIR` | `/opt/drmsonic` | install path |
-| `DRMSONIC_PORT` | `1234` | public port |
-| `DRMSONIC_CONTAINER` | `drmsonic` | container name |
+| `DRMSONIC_REPO` | `dragonstracker/drmsonic` | GitHub owner/repo |
+| `DRMSONIC_TAG` | `latest` | release tag (`v1.1.0`) or `latest` |
+| `DRMSONIC_DIR` | `/home/drmsonic` | install path |
+| `DRMSONIC_PORT` | `7779` | HTTP port |
+| `DRMSONIC_BIND` | `0.0.0.0` | bind address |
+| `DRMSONIC_SERVICE` | `drmsonic` | systemd unit name |
 
 ```sh
-DRMSONIC_PORT=8080 curl -fsSL .../install.sh | sudo -E bash
+DRMSONIC_PORT=8080 curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo -E bash
 ```
 
-Day two: `systemctl restart drmsonic`, `docker logs -f drmsonic`, `systemctl status drmsonic`.
+Day two: `systemctl restart drmsonic`, `journalctl -u drmsonic -f`, `systemctl status drmsonic`.
+
+Publish a new release from this repo:
+
+```sh
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+GitHub Actions builds the binaries and attaches them to that tag's Release page.
 
 
 ## Quick start
@@ -150,7 +160,7 @@ Day two: `systemctl restart drmsonic`, `docker logs -f drmsonic`, `systemctl sta
 2. Open **Config**, add a stream, paste the manifest URL.
 3. For encrypted sources paste `kid:key` pairs into **Keys**, one per line.
 4. **SAVE ALL**, then **START** on the **Streams** page.
-5. Play `http://<host>:1234/stream/<provider>/<stream>/master.m3u8`.
+5. Play `http://<host>:7779/stream/<provider>/<stream>/master.m3u8`.
 
 A stream is keyed by `ProviderId/StreamId`; both appear in the playback URL.
 
@@ -184,20 +194,20 @@ so if the player starts, the whole pipeline works.
 ### VLC
 
 ```sh
-vlc http://127.0.0.1:1234/stream/channels/channel1/master.m3u8
+vlc http://127.0.0.1:7779/stream/channels/channel1/master.m3u8
 ```
 
 ### ffplay
 
 ```sh
 ffplay -fflags nobuffer -flags low_delay \
-  http://127.0.0.1:1234/stream/channels/channel1/master.m3u8
+  http://127.0.0.1:7779/stream/channels/channel1/master.m3u8
 ```
 
 ### mpv
 
 ```sh
-mpv --no-cache http://127.0.0.1:1234/stream/channels/channel1/master.m3u8
+mpv --no-cache http://127.0.0.1:7779/stream/channels/channel1/master.m3u8
 ```
 
 ### curl and ffprobe
@@ -205,16 +215,16 @@ mpv --no-cache http://127.0.0.1:1234/stream/channels/channel1/master.m3u8
 Fetch the playlists:
 
 ```sh
-curl -s http://127.0.0.1:1234/stream/channels/channel1/master.m3u8
-curl -s http://127.0.0.1:1234/stream/channels/channel1/stream.m3u8
+curl -s http://127.0.0.1:7779/stream/channels/channel1/master.m3u8
+curl -s http://127.0.0.1:7779/stream/channels/channel1/stream.m3u8
 ```
 
 Grab the last announced segment and inspect it:
 
 ```sh
-SEG=$(curl -s http://127.0.0.1:1234/stream/channels/channel1/stream.m3u8 |
+SEG=$(curl -s http://127.0.0.1:7779/stream/channels/channel1/stream.m3u8 |
       grep -o 'stream[0-9]*\.ts' | tail -1)
-curl -s -o seg.ts http://127.0.0.1:1234/stream/channels/channel1/$SEG
+curl -s -o seg.ts http://127.0.0.1:7779/stream/channels/channel1/$SEG
 ffprobe -hide_banner seg.ts
 ```
 
@@ -235,7 +245,7 @@ ffmpeg -v warning -i a.ts -i b.ts -i c.ts -f null -
 ### UDP output
 
 Set **Output mode** to `udppush` and **Output params** to `udp://239.0.0.1:1234` (or a
-unicast `udp://127.0.0.1:1234`), then:
+unicast `udp://127.0.0.1:7779`), then:
 
 ```sh
 ffplay udp://@239.0.0.1:1234
@@ -271,7 +281,7 @@ deleteuser, renameuser, export, import, shutdown
 Stream selection uses `Streams: [ { "Id": "channel1" } ]`, `"all"`, or a comma separated list.
 
 ```sh
-curl -s -X POST http://127.0.0.1:1234/api/action \
+curl -s -X POST http://127.0.0.1:7779/api/action \
   -d '{"Action":"start","ProviderId":"channels","Streams":[{"Id":"channel1"}]}'
 ```
 

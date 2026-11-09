@@ -2,10 +2,11 @@ package config
 
 import "strings"
 
-const (
-	VersionName = "drmsonic"
-	VersionTag  = "v1.0.0"
+const VersionName = "drmsonic"
 
+var VersionTag = "v1.0.0"
+
+const (
 	ModeLive   = "live"
 	ModeReplay = "replay"
 	ModeVOD    = "vod"

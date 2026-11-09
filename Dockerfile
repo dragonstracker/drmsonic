@@ -21,8 +21,8 @@ RUN mkdir -p /app/providers && chown -R drmsonic:drmsonic /app
 
 USER drmsonic
 
-EXPOSE 1234
+EXPOSE 7779
 VOLUME ["/app/providers"]
 
 ENTRYPOINT ["/app/drmsonic"]
-CMD ["-p", "1234", "-b", "0.0.0.0", "-providers", "providers"]
+CMD ["-p", "7779", "-b", "0.0.0.0", "-providers", "providers"]
