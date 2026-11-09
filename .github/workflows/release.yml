@@ -69,3 +69,19 @@ jobs:
             dist/SHA256SUMS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: point floating tag at this commit
+        if: steps.ver.outputs.tag == 'dev'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/git/refs/tags/dev"
+          code=$(curl -sS -o /tmp/tag.json -w "%{http_code}" -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$api")
+          if [ "$code" = "200" ]; then
+            curl -sS -X PATCH -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+              "$api" -d "{\"sha\":\"${GITHUB_SHA}\",\"force\":true}" >/dev/null
+          else
+            curl -sS -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/refs" \
+              -d "{\"ref\":\"refs/tags/dev\",\"sha\":\"${GITHUB_SHA}\"}" >/dev/null
+          fi
