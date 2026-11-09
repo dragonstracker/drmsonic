@@ -384,7 +384,7 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 	if ch := s.mgr.Get(prov.Id, st.Id); ch != nil && ch.Running {
 		ch.Readers++
 	}
-	s.awaitSegments(r, prov, st, rend, 1, 5*time.Second)
+	s.awaitSegment(r, prov, st, rend, name)
 	data, ok := s.segmentData(prov, st, rend, name)
 	if !ok {
 		http.NotFound(w, r)
@@ -410,6 +410,43 @@ func (s *Server) awaitSegments(r *http.Request, prov *config.Provider, st *confi
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
+}
+
+func (s *Server) awaitSegment(r *http.Request, prov *config.Provider, st *config.Stream, rend, name string) {
+	seq, ok := segmentSeq(name)
+	if !ok {
+		return
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		buf := s.segments(prov, st, rend)
+		if len(buf.Items) > 0 && seq < buf.Items[0].Seq {
+			return
+		}
+		if time.Now().After(deadline) || r.Context().Err() != nil {
+			return
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+}
+
+func segmentSeq(name string) (uint64, bool) {
+	name = strings.TrimSuffix(strings.TrimPrefix(name, "stream"), ".ts")
+	if name == "" || len(name) > 19 {
+		return 0, false
+	}
+	var seq uint64
+	for i := 0; i < len(name); i++ {
+		if name[i] < '0' || name[i] > '9' {
+			return 0, false
+		}
+		seq = seq*10 + uint64(name[i]-'0')
+	}
+	return seq, true
 }
 
 func (s *Server) streamFromPath(w http.ResponseWriter, r *http.Request) (*config.Provider, *config.Stream) {

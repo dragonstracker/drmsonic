@@ -48,6 +48,7 @@ Versions follow the release tags on GitHub.
 - app1.conf / playlists emit `/{user}/{pass}/stream/...` URLs when the user has a password.
 - Dev releases pin `target_commitish` to the push SHA so tag `dev` tracks `devloper`.
 - Config page first-load race fixed (provider select before DataTable / serialized `updateStreams`).
+- `updateStreams` keeps a queued refresh's first-render flag, so a background tick can no longer discard the initial row build and leave cells blank until a manual reload.
 - All-qualities master only advertises variants that already have segments; remux starts are staggered.
 
 ### Fixed
@@ -57,6 +58,7 @@ Versions follow the release tags on GitHub.
 - Users password / providers / NoAuth save crashed when the providers select returned null.
 - Open panel without login never persisted when an earlier per-row update failed.
 - Panel assets were served without cache headers, so a stale `drmsonic.js` could survive an upgrade; static files now send `Cache-Control: no-cache`.
+- A segment request for a sequence already rotated out of the buffer used to block for five seconds before answering 404, stalling clients that fell behind; it now 404s immediately, while the live edge still waits for the next fragment.
 
 ## [1.1.3] — 2026-11-09
 

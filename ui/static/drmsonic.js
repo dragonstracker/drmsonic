@@ -1917,7 +1917,9 @@ async function checkallChange(e) {
 }
 
 var updateStreamsBusy = false;
-var updateStreamsPending = null;
+var updateStreamsPending = false;
+var updateStreamsInit = false;
+var streamsRendered = false;
 
 async function updateStreams(table, init) {
 	if (document.hidden) {
@@ -1927,20 +1929,28 @@ async function updateStreams(table, init) {
 	if (!sel || sel.selectedIndex < 0 || !sel.options.length) {
 		return
 	}
+	if (!streamsRendered) {
+		init = 1;
+	}
 	if (updateStreamsBusy) {
-		updateStreamsPending = init;
+		updateStreamsPending = true;
+		updateStreamsInit = updateStreamsInit || !!init;
 		return
 	}
 	updateStreamsBusy = true;
 	try {
-	await updateStreamsBody(table, init, sel.options[sel.selectedIndex].value);
+		await updateStreamsBody(table, init, sel.options[sel.selectedIndex].value);
+		if (init) {
+			streamsRendered = true;
+		}
 	} catch (err) {
 		console.error(err);
 	} finally {
 		updateStreamsBusy = false;
-		if (updateStreamsPending != null) {
-			var pending = updateStreamsPending;
-			updateStreamsPending = null;
+		if (updateStreamsPending) {
+			var pending = updateStreamsInit ? 1 : 0;
+			updateStreamsPending = false;
+			updateStreamsInit = false;
 			updateStreams(table, pending);
 		}
 	}
