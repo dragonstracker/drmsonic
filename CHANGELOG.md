@@ -50,6 +50,7 @@ Versions follow the release tags on GitHub.
 - Config page first-load race fixed (provider select before DataTable / serialized `updateStreams`).
 - `updateStreams` keeps a queued refresh's first-render flag, so a background tick can no longer discard the initial row build and leave cells blank until a manual reload.
 - All-qualities master only advertises variants that already have segments; remux starts are staggered.
+- The media buffer keeps six fragments beyond the announced window, so a client that fetches the oldest listed segment still gets it.
 
 ### Fixed
 - Empty `app1.conf` / playlist responses were a blank page when a provider had no streams; they now carry a `no streams configured` marker.
@@ -59,6 +60,7 @@ Versions follow the release tags on GitHub.
 - Open panel without login never persisted when an earlier per-row update failed.
 - Panel assets were served without cache headers, so a stale `drmsonic.js` could survive an upgrade; static files now send `Cache-Control: no-cache`.
 - A segment request for a sequence already rotated out of the buffer used to block for five seconds before answering 404, stalling clients that fell behind; it now 404s immediately, while the live edge still waits for the next fragment.
+- DASH streams emitted audio-only fragments whenever the video source briefly had no new segment, which churned the playlist and froze video with audio still running; the pipeline now waits for the next video segment.
 
 ## [1.1.3] — 2026-11-09
 

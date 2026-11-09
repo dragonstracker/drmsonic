@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -60,8 +61,9 @@ func (m *mediaStore) push(p, s, rend string, data []byte, dur float64, window in
 	seq := b.Seq
 	seg := Segment{Seq: seq, Name: segmentName(seq), Duration: dur, Data: data}
 	b.Items = append(b.Items, seg)
-	if len(b.Items) > window {
-		b.Items = b.Items[len(b.Items)-window:]
+	keep := window + 6
+	if len(b.Items) > keep {
+		b.Items = b.Items[len(b.Items)-keep:]
 	}
 	b.Seq++
 	return seg
@@ -134,6 +136,21 @@ func (m *mediaStore) drop(p, s string) {
 			delete(m.access, k)
 		}
 	}
+}
+
+func (m *mediaStore) dump() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]string, 0, len(m.bufs))
+	for k, b := range m.bufs {
+		first, last := uint64(0), uint64(0)
+		if len(b.Items) > 0 {
+			first = b.Items[0].Seq
+			last = b.Items[len(b.Items)-1].Seq
+		}
+		out = append(out, fmt.Sprintf("%s seq=%d items=%d first=%d last=%d", k, b.Seq, len(b.Items), first, last))
+	}
+	return out
 }
 
 func segmentName(seq uint64) string {

@@ -161,6 +161,10 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 			continue
 		}
 		if !haveVideo {
+			if vSrc != nil {
+				wait(ctx, 100*time.Millisecond)
+				continue
+			}
 			aRef, ok := pickNextSrc(aSrc, live)
 			if !ok {
 				wait(ctx, 400*time.Millisecond)

@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,8 +33,9 @@ func TestExpiredSegmentFailsFast(t *testing.T) {
 	prov := &config.Provider{Id: "channels", Name: "channels", RunningMode: config.RunInternalRemuxer, OutputMode: config.OutDirectHLS}
 	prov.Streams = []config.Stream{{Id: "channel1", Name: "channel1", Mode: config.ModeLive, OnDemand: true}}
 	s := testServer(t, Options{}, nil, prov)
+	s.mgr.Start("channels", "channel1")
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 12; i++ {
 		s.media.push("channels", "channel1", "", []byte("x"), 2, 3)
 	}
 
@@ -52,10 +54,62 @@ func TestExpiredSegmentFailsFast(t *testing.T) {
 	}
 }
 
+func TestPlaylistKeepsSpareSegments(t *testing.T) {
+	prov := &config.Provider{Id: "channels", Name: "channels", RunningMode: config.RunInternalRemuxer, OutputMode: config.OutDirectHLS}
+	prov.Streams = []config.Stream{{Id: "channel1", Name: "channel1", Mode: config.ModeLive, OnDemand: true, NbAnnouncedFragments: 4}}
+	s := testServer(t, Options{}, nil, prov)
+	s.mgr.Start("channels", "channel1")
+
+	for i := 0; i < 10; i++ {
+		s.media.push("channels", "channel1", "", []byte("x"), 2, 4)
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/stream/channels/channel1/stream.m3u8", nil)
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	if n := strings.Count(body, ".ts"); n != 4 {
+		t.Fatalf("announced %d segments, want 4\n%s", n, body)
+	}
+	if !strings.Contains(body, "stream00006.ts") {
+		t.Fatalf("oldest announced segment should be 6:\n%s", body)
+	}
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/stream/channels/channel1/stream00003.ts", nil)
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("spare segment status %d", rr.Code)
+	}
+}
+
+func TestBufferedSegmentServesImmediately(t *testing.T) {
+	prov := &config.Provider{Id: "channels", Name: "channels", RunningMode: config.RunInternalRemuxer, OutputMode: config.OutDirectHLS}
+	prov.Streams = []config.Stream{{Id: "channel1", Name: "channel1", Mode: config.ModeLive, OnDemand: true}}
+	s := testServer(t, Options{}, nil, prov)
+	s.mgr.Start("channels", "channel1")
+
+	s.media.push("channels", "channel1", "", []byte("seg"), 2, 6)
+
+	start := time.Now()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/stream/channels/channel1/stream00000.ts", nil)
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK || rr.Body.String() != "seg" {
+		t.Fatalf("status %d body %q", rr.Code, rr.Body.String())
+	}
+	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
+		t.Fatalf("buffered segment took %s", elapsed)
+	}
+}
+
 func TestLiveEdgeSegmentWaits(t *testing.T) {
 	prov := &config.Provider{Id: "channels", Name: "channels", RunningMode: config.RunInternalRemuxer, OutputMode: config.OutDirectHLS}
 	prov.Streams = []config.Stream{{Id: "channel1", Name: "channel1", Mode: config.ModeLive, OnDemand: true}}
 	s := testServer(t, Options{}, nil, prov)
+	s.mgr.Start("channels", "channel1")
 
 	for i := 0; i < 2; i++ {
 		s.media.push("channels", "channel1", "", []byte("seg"), 2, 6)

@@ -156,6 +156,10 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "\t[%s/%s]\n\t\tTotal: %d\n\t\tRunning: %d\n", p.Id, p.Name, len(p.Streams), run)
 	}
 	fmt.Fprintf(w, "\tTotal: %d\n\tRunning: %d\n", total, running)
+	fmt.Fprintf(w, "\nSegment buffers:\n")
+	for _, line := range s.media.dump() {
+		fmt.Fprintf(w, "\t%s\n", line)
+	}
 	fmt.Fprintf(w, "\n</pre></html>")
 }
 
@@ -349,9 +353,13 @@ func (s *Server) handleMediaPlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 	s.awaitSegments(r, prov, st, rend, 2, 10*time.Second)
 	buf := s.segments(prov, st, rend)
+	items := buf.Items
+	if n := windowFor(prov, st); len(items) > n {
+		items = items[len(items)-n:]
+	}
 	seq := buf.Seq
-	if len(buf.Items) > 0 {
-		seq = buf.Items[0].Seq
+	if len(items) > 0 {
+		seq = items[0].Seq
 	}
 	fmt.Fprintf(w, "#EXTM3U\n")
 	fmt.Fprintf(w, "#EXT-X-VERSION:6\n")
@@ -359,7 +367,7 @@ func (s *Server) handleMediaPlaylist(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "#EXT-X-DISCONTINUITY-SEQUENCE:0\n")
 	fmt.Fprintf(w, "#EXT-X-TARGETDURATION:%d\n", buf.Target)
 	fmt.Fprintf(w, "#EXT-X-INDEPENDENT-SEGMENTS\n")
-	for _, seg := range buf.Items {
+	for _, seg := range items {
 		fmt.Fprintf(w, "#EXTINF:%.8f,\n", seg.Duration)
 		fmt.Fprintf(w, "%s%s\n", seg.Name, queryString(r))
 	}
@@ -384,8 +392,7 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 	if ch := s.mgr.Get(prov.Id, st.Id); ch != nil && ch.Running {
 		ch.Readers++
 	}
-	s.awaitSegment(r, prov, st, rend, name)
-	data, ok := s.segmentData(prov, st, rend, name)
+	data, ok := s.awaitSegment(r, prov, st, rend, name)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -412,23 +419,26 @@ func (s *Server) awaitSegments(r *http.Request, prov *config.Provider, st *confi
 	}
 }
 
-func (s *Server) awaitSegment(r *http.Request, prov *config.Provider, st *config.Stream, rend, name string) {
+func (s *Server) awaitSegment(r *http.Request, prov *config.Provider, st *config.Stream, rend, name string) ([]byte, bool) {
 	seq, ok := segmentSeq(name)
 	if !ok {
-		return
+		return nil, false
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
+		if data, found := s.segmentData(prov, st, rend, name); found {
+			return data, true
+		}
 		buf := s.segments(prov, st, rend)
 		if len(buf.Items) > 0 && seq < buf.Items[0].Seq {
-			return
+			return nil, false
 		}
 		if time.Now().After(deadline) || r.Context().Err() != nil {
-			return
+			return nil, false
 		}
 		select {
 		case <-r.Context().Done():
-			return
+			return nil, false
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
