@@ -5,7 +5,7 @@
 		{{template "menu.html" .}}
 
 		<h2>Description</h2>
-		<p>O11 purpose is to convert LIVE and VOD streams to a friendly protocol such as HLS and/or direct http MpegTS.</p>
+		<p>DRMSONIC purpose is to convert LIVE and VOD streams to a friendly protocol such as HLS and/or direct http MpegTS.</p>
 		<p>The following input formats are currently supported</p>
 		<ul>
 			<li >DASH</li>
@@ -17,7 +17,7 @@
 			<li >FFmpeg must be installed when not using internal remuxer</li>
 		</ul>
 		<h2>Executing program</h2>
-		<p>You can list command line options using <code>./o11 -h</code></p>
+		<p>You can list command line options using <code>./drmsonic -h</code></p>
 		<br>
 		<h2><a href="providers" class="btn btn-primary" style="width:100px;">Providers</a>&nbsp;&nbsp;Provider selection page</h2>
 		<br>
@@ -44,14 +44,14 @@
 		<h2><a href="config/{{.ProviderId}}" class="btn btn-primary" style="width:100px;">Config</a>&nbsp;&nbsp;Providers and streams configuration page</h2>
 		<br>
 		<h3>Providers</h3>
-		<p>O11 supports multiple providers. Each provider will have its own set of streams and its own network configuration.</p>
+		<p>DRMSONIC supports multiple providers. Each provider will have its own set of streams and its own network configuration.</p>
 		<p>Go to <code>Config</code> tab, select a provider name and click on <code>NEW PROVIDER</code>. Provider configuration files will be stored into <code>providers/</code> by default. This path can be changed using <code>-providers [path]</code> from command-line.</p>
 		<p>Clicking on <code>RESCAN PROVIDERS</code> will trigger a full scan of the <code>providers/</code> directory for new provider configuration files.</p>
 		<p>The <code>DELETE</code> button will delete the selected provider. Its configuration file will only be deleted after clicking on <code>SAVE</code>.</p>
 		<p>You can export a selection of streams or a full provider’s configuration using <code>EXPORT SELECTION</code> or <code>EXPORT PROVIDER</code>.</p>
 		<p>You can also import a new proviser using the <code>IMPORT</code> button. You can input a provider name or let it use the one from the config file you import.</p>
 		<h3>Running/Output Mode</h3>
-		<p>O11 supports 5 running modes:</p>
+		<p>DRMSONIC supports 5 running modes:</p>
 		<ul>
 			<li ><strong><em>Internal remuxer</em></strong>: (default mode) this mode works without FFmpeg, the remuxing operations are done internally. All output modes are available in this this mode. No file is written on disk.</li>
 			<li ><strong><em>FFmpeg resident</em></strong>: FFmpeg must be installed. A FFmpeg process is spawned when the stream is started and will keep running until the channel is stopped. All output modes are available in this this mode.</li>
@@ -59,7 +59,7 @@
 			<li><strong><em>FFmpeg MultiTS HLS</em></strong>: FFmpeg must be installed. On each new segment, FFmpeg is spawn to convert it to a HLS video or audio fragment. It results in a multi TS HLS playlist.</li>
 			<li><strong><em>FMP4 HLS</em></strong>: this mode works without FFmpeg. The input stream is converted to FMP4 HLS. No file is written on disk.</li>
 		</ul>
-		<p>O11 supports 4 output modes when Internal Remuxer or Resident FFmpeg running modes are selected:</p>
+		<p>DRMSONIC supports 4 output modes when Internal Remuxer or Resident FFmpeg running modes are selected:</p>
 		<ul>
 			<li><strong><em>HLS/Direct</em></strong>: in this mode, the input stream is converted to HLS and can also be retrieved in direct HTTP mode.</li>
 			<li><strong><em>SRT Server</em></strong>: in this mode, the stream is available through the SRT server.</li>
@@ -89,14 +89,14 @@
 			<li ><strong><em>Status</em></strong>: the status of the stream.</li>
 			<li ><strong><em>Mode</em></strong>: <strong>Live</strong>, <strong>Replay</strong> or <strong>VOD</strong>. <strong>Live</strong> mode is for a live channel. <strong>Replay</strong> will trigger a fetch of all the fragments from the manifest and generate a HLS output stream. <strong>VOD</strong> can be used to get VOD streamd and generate mp4 file.</li>
 			<li ><strong><em>Manifest</em></strong>: setup the manifest url and/or provider script params get a dynamic manifest (the <code>SessionManifest</code> option must be selected, please check the <strong>Scripts</strong> section for more details). Network ovverride fields will also appear in the box when the <code>NetworkOverride</code> option is selected. Press the <code>R</code> button to parse the manifest and refresh the tracks list.</li>
-			<li ><strong><em>Tracks</em></strong>: list of selectable Video/Audio/Subtitles tracks. Only one Video track can be selected. The <strong>Best quality</strong> option is seletected by default and let O11 take the best resolution/bandwidth/framrate. Multiple audio and subtiltes tracks can be selected.</li>
-			<li ><strong><em>Keys or CDM Script</em></strong>: set the decryption keys for the stream. On line per kid:key. If <code>UseCdm</code>, O11 will try to call the selected provider script to get keys using the specified parametersm. Please check the <strong>Scripts</strong> section for more detail.</li>
+			<li ><strong><em>Tracks</em></strong>: list of selectable Video/Audio/Subtitles tracks. Only one Video track can be selected. The <strong>Best quality</strong> option is seletected by default and let DRMSONIC take the best resolution/bandwidth/framrate. Multiple audio and subtiltes tracks can be selected.</li>
+			<li ><strong><em>Keys or CDM Script</em></strong>: set the decryption keys for the stream. On line per kid:key. If <code>UseCdm</code>, DRMSONIC will try to call the selected provider script to get keys using the specified parametersm. Please check the <strong>Scripts</strong> section for more detail.</li>
 			<li ><strong><em>Options</em></strong>: please see the <strong>Stream options</strong> section.</li>
 		</ul>
 		<h3>Stream options</h3>
 		<p>Several options can be selected for each stream.</p>
 		<ul>
-			<li ><strong><em>Autostart</em></strong>: auto start the stream when starting O11. It is possible to override this option globally using the <code>-noautostart</code> command-line option. If the stream is an event, it will be autostarted only during live window.</li>
+			<li ><strong><em>Autostart</em></strong>: auto start the stream when starting DRMSONIC. It is possible to override this option globally using the <code>-noautostart</code> command-line option. If the stream is an event, it will be autostarted only during live window.</li>
 			<li ><strong><em>On demand</em></strong>: automatically start a stream when the internal or a remote player request for it. The stream is then automatically stops when it is not used anymore. Use this option to avoid having all streams running for nothing 24/24.</li>
 			<li ><strong><em>Speed up</em></strong>: run all segments download in parallel. It speeds up OnDemand more start.</li>
 			<li ><strong><em>Session manifest script</em></strong>: call the script to automatically get the manifest URL. Usefull when the manifest is changing (check the <strong>Scripts</strong> paragraph for more details).</li>
@@ -111,9 +111,9 @@
 			<li ><strong><em>Output field</em></strong>: list of UPD/SRT outputs or Custom command parameters.</li>
 		</ul>
 		<h3>Scripts</h3>
-		<p>Scripts play a big role for O11. Each provider should have each own script. It can be either a shell script (.sh) or a python3 script (.py).<br>
-		An example of script can be found here  <a download href="static/example.py">example.py</a>. It uses <a download href="static/o11.py">o11.py</a>.
-		When a script is configured, only it’s name body must be specify. O11 will first try to start the .sh extension and then .py one if not available.<br>
+		<p>Scripts play a big role for DRMSONIC. Each provider should have each own script. It can be either a shell script (.sh) or a python3 script (.py).<br>
+		An example of script can be found here  <a download href="static/example.py">example.py</a>. It uses <a download href="static/DRMSONIC.py">DRMSONIC.py</a>.
+		When a script is configured, only it’s name body must be specify. DRMSONIC will first try to start the .sh extension and then .py one if not available.<br>
 		Scripts must be stored in the <code>scripts/</code> directory.</p>
 		<p>Let say we have a provider called <strong>Provider 1</strong>which script name is <strong><code>provider1.py</code></strong>, stored in <code>scripts/provider.py</code>.<br>
 		This script must then be referenced as <strong>provider1</strong> in the <strong>Script Name</strong> field. Inside the ManifestScript/CdmScript/EventsScript/ChannelsScript/Epg fields, the scripts extra parameters must be speciefied (such as the stream id for instance, using id=....</p>
@@ -201,7 +201,7 @@ kid2:key2
 		<ul>
 			<li ><strong><em>Password</em></strong>: the password for the selected user.</li>
 			<li ><strong><em>Providers</em></strong>: the list of providers the user has access to. If the <strong>is Admin</strong> option is seletected, the user has access to all providers</li>
-			<li ><strong><em>Networks</em></strong>: allowed network for user. If nothing is selected, the user can access O11 from any ip.</li>
+			<li ><strong><em>Networks</em></strong>: allowed network for user. If nothing is selected, the user can access DRMSONIC from any ip.</li>
 			<li ><strong><em>IsAdmin</em></strong>: set user as admin. Only admin users can access the <code>Users</code> and <code>Config</code> pages.</li>
 			<li ><strong><em>WebAcess</em></strong>: allow Web UI access to user.</li>
 		</ul>
