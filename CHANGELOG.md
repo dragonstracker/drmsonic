@@ -61,6 +61,8 @@ Versions follow the release tags on GitHub.
 - Panel assets were served without cache headers, so a stale `drmsonic.js` could survive an upgrade; static files now send `Cache-Control: no-cache`.
 - A segment request for a sequence already rotated out of the buffer used to block for five seconds before answering 404, stalling clients that fell behind; it now 404s immediately, while the live edge still waits for the next fragment.
 - DASH streams emitted audio-only fragments whenever the video source briefly had no new segment, which churned the playlist and froze video with audio still running; the pipeline now waits for the next video segment.
+- Provider import rejected every file with `invalid import body`: the panel posts the file text as `ProviderImportConfig`, but only a `Body` object was read. Import now accepts the panel payload, an exported provider object, and o11-style exports (`Channels`, `ManifestUrl`, `Headers` as manifest/media maps, `XForwardedFor` as a string), and the typed provider name wins when one is given.
+- Provider import was capped at 1 MB, so large channel lists were refused; panel API bodies allow 16 MB.
 
 ## [1.1.3] — 2026-11-09
 

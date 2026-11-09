@@ -23,6 +23,8 @@ type actionRequest struct {
 	Raw          map[string]any   `json:"-"`
 }
 
+const maxActionBody = 16 << 20
+
 func (s *Server) actionAllowed(r *http.Request, action string) bool {
 	u, ok := s.currentUser(r)
 	if !ok {
@@ -69,7 +71,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var raw map[string]any
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxActionBody))
 	dec.UseNumber()
 	if err := dec.Decode(&raw); err != nil {
 		http.Error(w, "bad request body", http.StatusInternalServerError)
@@ -888,18 +890,21 @@ func (s *Server) acExport(w http.ResponseWriter, req actionRequest) {
 }
 
 func (s *Server) acImport(w http.ResponseWriter, req actionRequest) {
-	body, ok := req.Raw["Body"].(map[string]any)
-	if !ok {
-		http.Error(w, "invalid import body", http.StatusInternalServerError)
-		return
-	}
-	p := &config.Provider{}
-	raw, _ := json.Marshal(body)
-	if err := json.Unmarshal(raw, p); err != nil {
+	body, err := importBody(req.Raw)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if name := str(mapGet(req.Raw, "Name")); name != "" {
+	p, err := providerFromBody(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	name := req.ProviderName
+	if name == "" {
+		name = p.Name
+	}
+	if name != "" {
 		p.Name = name
 		p.Id = config.Slug(name)
 	}

@@ -243,6 +243,7 @@ func (s *Store) Put(p *Provider) error {
 	if p.Id == "" {
 		return errors.New("empty provider id")
 	}
+	p.Streams = normalizeStreams(p.Streams, p)
 	if _, ok := s.providers[p.Id]; !ok {
 		s.order = append(s.order, p.Id)
 		sort.Strings(s.order)
