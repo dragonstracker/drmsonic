@@ -102,6 +102,25 @@ Open `http://127.0.0.1:1234/`.
 
 `run.sh` is a thin wrapper around the release binary.
 
+### Docker
+
+```sh
+docker build -t drmsonic:latest .
+docker run -d --name drmsonic --restart unless-stopped \
+  -p 127.0.0.1:1234:1234 \
+  -v "$PWD/providers:/app/providers" \
+  drmsonic:latest -p 1234 -b 0.0.0.0 -providers providers -v 1
+```
+
+Or with Compose:
+
+```sh
+docker compose up -d --build
+docker compose logs -f
+```
+
+The image is a two stage build: `golang:1.22-alpine` compiles a static binary, `alpine` runs it as an unprivileged user. `providers/` is a bind mount so panel edits survive container rebuilds. The published port is bound to `127.0.0.1` so the panel and playlists are not exposed on the LAN unless you change the mapping.
+
 ## Quick start
 
 1. Open the panel, go to **Providers** and create a provider (or edit `providers/example.json`).

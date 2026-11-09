@@ -1,0 +1,10 @@
+bin/
+dist/
+testrun/
+_import/
+.git/
+.github/
+*.log
+*.tmp
+*.exe
+drmsonic.json
