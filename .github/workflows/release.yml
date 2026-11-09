@@ -54,9 +54,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           name: drmsonic ${{ steps.ver.outputs.version }}
           draft: false
           prerelease: ${{ steps.ver.outputs.prerelease }}
+          make_latest: ${{ steps.ver.outputs.prerelease == 'false' }}
           generate_release_notes: true
           files: |
             dist/drmsonic-linux-amd64

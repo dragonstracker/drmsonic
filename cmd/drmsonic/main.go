@@ -66,8 +66,12 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 	if *user == "" {
-		if err := store.EnsureDefaultAdmin(); err != nil {
+		created, err := store.EnsureDefaultAdmin()
+		if err != nil {
 			log.Fatalf("default admin: %v", err)
+		}
+		if created {
+			log.Printf("default login: admin / admin (change under Users)")
 		}
 	}
 

@@ -35,6 +35,11 @@ Versions follow the release tags on GitHub.
 ### Added
 - Default `admin` / `admin` on first install when no passwords exist (changeable under Users).
 - Video track option **All qualities** alongside Best and per-rendition ids.
+- Install prints binary version, verifies `dev-*` when `DRMSONIC_TAG=dev`, seeds admin on fresh installs.
+
+### Changed
+- SAVE USERS flushes every row from the form before persisting (password no longer lost if the field was not blurred).
+- Dev releases pin `target_commitish` to the push SHA so tag `dev` tracks `devloper`.
 
 ## [1.1.3] — 2026-11-09
 

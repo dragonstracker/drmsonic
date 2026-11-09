@@ -208,6 +208,8 @@ Developer branch (rolling prerelease tag `dev`, updated on every `devloper` push
 DRMSONIC_TAG=dev curl -fsSL https://github.com/dragonstracker/drmsonic/releases/download/dev/install.sh | sudo -E bash
 ```
 
+The panel must show `drmsonic dev-<sha>` (for example `dev-7f9d15a`). If it still says `v1.1.x`, the VPS pulled production `latest` — re-run the command above with `DRMSONIC_TAG=dev` and `-E` so sudo keeps the env var.
+
 Same upgrade/wipe scripts work with `DRMSONIC_TAG=dev`.
 
 ## ClearKey keys

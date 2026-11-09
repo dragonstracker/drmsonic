@@ -638,13 +638,49 @@ async function shutdownClick(e) {
 	}
 };
 
-// SAVE onAbOck
+async function flushUsersFromForm() {
+	var n = 0;
+	while (document.getElementById('username' + n)) {
+		var userProviders = [];
+		var picked = $('#userProviders' + n).val();
+		if (picked) {
+			picked.forEach(function(id) { userProviders.push(id); });
+		}
+		var data = {
+			Action: 'updateuser',
+			Users: [{
+				Username: document.getElementById('username' + n).innerText,
+				Password: $('#password' + n).val(),
+				Network: $('#network' + n).val(),
+				IsAdmin: document.getElementById('isadmin' + n).checked,
+				HasWebAccess: document.getElementById('haswebaccess' + n).checked,
+				ProviderIds: userProviders
+			}]
+		};
+		let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			credentials: 'same-origin',
+			body: JSON.stringify(data),
+		});
+		if (!response.ok) {
+			showStatusWindow(await response.text());
+			return false;
+		}
+		n++;
+	}
+	return true;
+}
+
 async function saveClick(e) {
 	e.preventDefault();
 
 	if (this.id == 'saveall') {
 		providerId = ""
 	} else if (this.id == 'saveusers') {
+		if (!(await flushUsersFromForm())) {
+			return;
+		}
 		providerId = "users_only"
 	} else {
 		providerId = document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value
@@ -656,10 +692,11 @@ async function saveClick(e) {
 	};
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
+		credentials: 'same-origin',
 		body: JSON.stringify(data),
 	});
 
@@ -671,6 +708,7 @@ async function saveClick(e) {
 			document.getElementById('saveall').setAttribute("disabled","disabled");
 		} else if (this.id == 'saveusers') {
 			document.getElementById('saveusers').setAttribute("disabled","disabled");
+			location.reload();
 		} else {
 			document.getElementById('saveprovider').setAttribute("disabled","disabled");
 		}
