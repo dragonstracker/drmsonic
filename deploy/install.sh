@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO="${DRMSONIC_REPO:-dragonstracker/drmsonic}"
-TAG="${DRMSONIC_TAG:-dev}"
+TAG="${DRMSONIC_TAG:-latest}"
 INSTALL_DIR="${DRMSONIC_DIR:-/home/drmsonic}"
 PORT="${DRMSONIC_PORT:-7779}"
 BIND="${DRMSONIC_BIND:-0.0.0.0}"

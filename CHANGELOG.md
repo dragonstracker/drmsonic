@@ -53,6 +53,7 @@ Versions follow the release tags on GitHub.
 ### Fixed
 - Users password / providers / NoAuth save crashed when the providers select returned null.
 - Open panel without login never persisted when an earlier per-row update failed.
+- Panel assets were served without cache headers, so a stale `drmsonic.js` could survive an upgrade; static files now send `Cache-Control: no-cache`.
 
 ## [1.1.3] — 2026-11-09
 

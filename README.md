@@ -140,7 +140,7 @@ curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/i
 | Variable | Default | Purpose |
 |---|---|---|
 | `DRMSONIC_REPO` | `dragonstracker/drmsonic` | GitHub owner/repo |
-| `DRMSONIC_TAG` | `dev` | release tag (`dev`, `latest`, or `v1.1.3`) |
+| `DRMSONIC_TAG` | `latest` | release tag (`latest`, `dev`, or `vX.Y.Z`) |
 | `DRMSONIC_DIR` | `/home/drmsonic` | install path |
 | `DRMSONIC_PORT` | `7779` | HTTP port |
 | `DRMSONIC_BIND` | `0.0.0.0` | bind address |
@@ -157,6 +157,26 @@ curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/u
 ```
 
 Same overrides as install: `DRMSONIC_DIR`, `DRMSONIC_PORT`, `DRMSONIC_SERVICE`, `DRMSONIC_CONTAINER`.
+
+### Clean reinstall of the dev build
+
+Wipe everything, then install the current `dev` prerelease:
+
+```sh
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/download/dev/uninstall.sh | sudo bash
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/download/dev/install.sh | sudo bash
+```
+
+Confirm the binary and panel footer show `drmsonic dev-<sha>`:
+
+```sh
+/home/drmsonic/drmsonic -version
+systemctl status drmsonic --no-pager
+```
+
+The wipe deletes `/home/drmsonic` including `drmsonic.json`, so the installer reseeds `admin` / `admin`.
+
+GitHub Actions artifacts (`actions/runs/.../artifacts/...`) are private to signed-in users and expire. The `dev` release assets are the same binaries and are public:
 
 Day two: `systemctl restart drmsonic`, `journalctl -u drmsonic -f`, `systemctl status drmsonic`.
 

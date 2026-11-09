@@ -205,6 +205,7 @@ func (s *Server) routes() {
 	m := s.mux
 
 	m.HandleFunc("GET /static/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
 		http.StripPrefix("/static/", s.static).ServeHTTP(w, r)
 	})
 

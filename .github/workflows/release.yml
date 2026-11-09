@@ -47,6 +47,9 @@ jobs:
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o dist/drmsonic-windows-amd64.exe ./cmd/drmsonic
           cp deploy/install.sh dist/install.sh
           cp deploy/uninstall.sh dist/uninstall.sh
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            sed -i 's/TAG="${DRMSONIC_TAG:-latest}"/TAG="${DRMSONIC_TAG:-dev}"/' dist/install.sh
+          fi
           cd dist
           sha256sum drmsonic-linux-amd64 drmsonic-linux-arm64 drmsonic-windows-amd64.exe install.sh uninstall.sh > SHA256SUMS
 
