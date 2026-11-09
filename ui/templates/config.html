@@ -429,6 +429,32 @@
 
 			document.getElementById('configbutton').style.backgroundColor = 'darkblue';
 
+			var intervalId = null;
+			var PChangeCounter = new Object();
+			var GlobalChangeCounter = -2;
+			var streamsPrevParams = new Map();
+
+			saveall.onclick = saveClick;
+			rescanproviders.onclick = rescanProvidersClick;
+			shutdown.onclick = shutdownClick;
+
+			addProviderForm.onsubmit = addProviderFormSubmit;
+			importprovider.onclick = importProviderClick;
+
+			{{ if .Providers }}
+			providerSelection.onchange = refreshConfigWithProvider;
+			{{ if .ProviderId }}
+			for (i=0; i<document.getElementById('providerSelection').length; i++) {
+				if (document.getElementById('providerSelection').options[i].value == '{{ .ProviderId }}') {
+					document.getElementById('providerSelection').selectedIndex = i;
+					break
+				}
+			}
+			{{ end }}
+			{{ end }}
+
+			{{ if .ProviderId }}
+
 			var table = $('#streamsTable').DataTable( {
 							"lengthMenu": [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
 							"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
@@ -443,36 +469,7 @@
 				table.search(urlParams.get('search')).draw();
 			}
 
-			var intervalId = null;
-			var PChangeCounter = new Object();
-			var GlobalChangeCounter = -2;
-
-			table.on( 'draw.dt', function() { updateStreams(table, 1);} );
-
-			var streamsPrevParams = new Map();
-
-			saveall.onclick = saveClick;
-			rescanproviders.onclick = rescanProvidersClick;
-			shutdown.onclick = shutdownClick;
-
-			addProviderForm.onsubmit = addProviderFormSubmit;
-			importprovider.onclick = importProviderClick;
-
-			{{ if .Providers }}
-			providerSelection.onchange = refreshConfigWithProvider
-			document.getElementById('providerSelection').selectedIndex = -1;
-			{{ if .ProviderId }}
-			for (i=0; i<document.getElementById('providerSelection').length; i++) {
-				if (document.getElementById('providerSelection').options[i].value == '{{ .ProviderId }}') {
-					document.getElementById('providerSelection').selectedIndex = i;
-					break
-				}
-			}
-			{{ end }}
-			{{ end }}
-
-
-			{{ if .ProviderId }}
+			table.on('draw.dt', function() { updateStreams(table, 0); });
 
 			var url = new URL(window.location.href);
 			let params = new URLSearchParams(url.search);
@@ -586,7 +583,7 @@
 			document.querySelector(".js-Selector").innerHTML = selectorOptions;
 
 			updateStreams(table, 1);
-			intervalId=setInterval("updateStreams(table, 0);",1000);
+			intervalId = setInterval(function() { updateStreams(table, 0); }, 1000);
 			{{ end }}
 
 		</script>

@@ -46,6 +46,8 @@ Versions follow the release tags on GitHub.
 - Session cookie satisfies CSRF for panel API posts (SAVE USERS works while logged in).
 - app1.conf / playlists emit `/{user}/{pass}/stream/...` URLs when the user has a password.
 - Dev releases pin `target_commitish` to the push SHA so tag `dev` tracks `devloper`.
+- Config page first-load race fixed (provider select before DataTable / serialized `updateStreams`).
+- All-qualities master only advertises variants that already have segments; remux starts are staggered.
 
 ## [1.1.3] — 2026-11-09
 

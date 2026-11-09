@@ -1958,27 +1958,53 @@ async function checkallChange(e) {
 	});
 }
 
-async function updateStreams(table, init) {
+var updateStreamsBusy = false;
+var updateStreamsPending = null;
 
+async function updateStreams(table, init) {
 	if (document.hidden) {
 		return
 	}
+	var sel = document.getElementById('providerSelection');
+	if (!sel || sel.selectedIndex < 0 || !sel.options.length) {
+		return
+	}
+	if (updateStreamsBusy) {
+		updateStreamsPending = init;
+		return
+	}
+	updateStreamsBusy = true;
+	try {
+	await updateStreamsBody(table, init, sel.options[sel.selectedIndex].value);
+	} catch (err) {
+		console.error(err);
+	} finally {
+		updateStreamsBusy = false;
+		if (updateStreamsPending != null) {
+			var pending = updateStreamsPending;
+			updateStreamsPending = null;
+			updateStreams(table, pending);
+		}
+	}
+}
 
+async function updateStreamsBody(table, init, providerId) {
 	idsList = getVisibleIds(init);
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
+		credentials: 'same-origin',
 		body: JSON.stringify({
 					Action : "getstatus",
-					ProviderId : document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value,
+					ProviderId : providerId,
 					Streams: [  { "Id" : idsList, }, ]
 					}),
-	}).catch(error => { showStatusWindow('remote server unreachable'); clearInterval(intervalId); intervalId = 0;});
+	}).catch(error => { showStatusWindow('remote server unreachable'); clearInterval(intervalId); intervalId = 0; return null;});
 
-	if (intervalId == 0) {
+	if (intervalId == 0 || !response) {
 		return
 	}
 
@@ -1987,20 +2013,18 @@ async function updateStreams(table, init) {
 	text = await response.text();
 	if (!response.ok) {
 		showStatusWindow(text);
+		return
 	}
 
 	data = JSON.parse(text);
 
-	// CHECK ADD/DELETE
-	if (document.getElementById('filterselection').selectedIndex > 0 && (data.StreamsCount != table.rows().count())) {
-		if (data.Providers[0].Id != document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value) {
-			// Skip update, it was not meant for us
-			//console.log(" channels count changed, but providers are different, skip")
+	if (document.getElementById('filterselection') && document.getElementById('filterselection').selectedIndex > 0 && (data.StreamsCount != table.rows().count())) {
+		if (data.Providers && data.Providers[0] && data.Providers[0].Id != providerId) {
 			return
 		}
-		console.log("channels count changed, reloading", data.StreamsCount, table.rows().count())
 		clearInterval(intervalId);
 		location.reload();
+		return
 	}
 
 	// Build list of channels to update
@@ -2030,13 +2054,14 @@ async function updateStreams(table, init) {
 
 	if (idsList != '' || data.GlobalChangeCounter > GlobalChangeCounter) {
 		let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-			method: 'POST', // or 'PUT'
+			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
 			},
+			credentials: 'same-origin',
 			body: JSON.stringify({
 				Action : "getconf",
-				ProviderId : document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value,
+				ProviderId : providerId,
 				Streams: [  { "Id" : idsList, } ]
 			}),
 		})
@@ -2044,6 +2069,7 @@ async function updateStreams(table, init) {
 		text = await response.text();
 		if (!response.ok) {
 			showStatusWindow(text);
+			return
 		}
 
 		conf = JSON.parse(text);
@@ -3186,8 +3212,13 @@ function getVisibleIds(init) {
 
 	var idsList = ""
 	rowArray.forEach( function (row) {
-		id = /name(_[^_]*_[^"]*)/.exec(row[2])[1]
-		if (isInViewport(document.getElementById('name' + id)) || (init && !document.getElementById('startStop' + id)) ) {
+		var m = /name(_[^_]*_[^"]*)/.exec(row[2])
+		if (!m) {
+			return
+		}
+		id = m[1]
+		var el = document.getElementById('name' + id)
+		if ((el && isInViewport(el)) || (init && !document.getElementById('startStop' + id)) ) {
 			idsList += getStreamId(id) + ","
 		}
 	});

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -253,11 +254,34 @@ func (s *Server) handleMasterPlaylist(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "#EXTM3U\n")
 	rends := renditionIDs(st)
 	if len(rends) > 1 {
+		sort.SliceStable(rends, func(i, j int) bool {
+			a, b := trackByID(st, rends[i]), trackByID(st, rends[j])
+			ba, bb := 0, 0
+			if a != nil {
+				ba = a.Bandwidth
+			}
+			if b != nil {
+				bb = b.Bandwidth
+			}
+			return ba > bb
+		})
+		s.awaitSegments(r, prov, st, rends[0], 1, 8*time.Second)
+		emitted := 0
 		for _, id := range rends {
+			if len(s.segments(prov, st, id).Items) == 0 {
+				continue
+			}
 			t := trackByID(st, id)
 			bandwidth, res, fps, codecs := variantMeta(t, audioCodec)
 			fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
 			fmt.Fprintf(w, "v/%s/stream.m3u8%s\n", id, queryString(r))
+			emitted++
+		}
+		if emitted == 0 {
+			t := trackByID(st, rends[0])
+			bandwidth, res, fps, codecs := variantMeta(t, audioCodec)
+			fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
+			fmt.Fprintf(w, "v/%s/stream.m3u8%s\n", rends[0], queryString(r))
 		}
 		return
 	}

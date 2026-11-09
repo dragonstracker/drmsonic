@@ -114,11 +114,11 @@
 				renameuser{{$n}}.onclick = renameUserClick;
 			{{end}}
 
-			$('.selectpicker').selectpicker();
 			var usersTable = $('#usersTable').removeAttr('width').DataTable({
 				"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
 				"autoWidth": false
 			});
+			$('.selectpicker').selectpicker();
 		</script>
 	</body>
 </html>

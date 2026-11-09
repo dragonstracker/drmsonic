@@ -67,11 +67,19 @@ func (s *Server) startChannel(prov *config.Provider, st *config.Stream) {
 		return
 	}
 	var wg sync.WaitGroup
-	for _, vid := range rends {
+	for i, vid := range rends {
 		vid := vid
+		delay := time.Duration(i) * 250 * time.Millisecond
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			if delay > 0 {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(delay):
+				}
+			}
 			s.supervise(ctx, prov, st, ch, key, vid, false)
 		}()
 	}
