@@ -91,8 +91,10 @@ Open `http://127.0.0.1:7779/`.
 | `-baseurl` | request host | public URL written into playlists |
 | `-providers` | `providers` | providers directory |
 | `-c` | `drmsonic.json` | users/config file |
-| `-user` / `-password` | empty | static admin credentials |
+| `-user` / `-password` | empty | static admin credentials (both or neither) |
 | `-allow` | empty | comma separated IPs or CIDRs that skip auth |
+| `-trusted-proxies` | empty | proxies allowed to set `X-Forwarded-For` |
+| `-allow-private-fetch` | off | allow upstream fetches to private/loopback hosts |
 | `-l` | empty | log file |
 | `-v` | `0` | verbosity 1..3 |
 | `-noautostart` | off | do not start autostart streams |
@@ -119,7 +121,7 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-### Fresh VPS, one command (binary, like o11)
+### Fresh VPS, one command
 
 Every `v*` git tag publishes Linux amd64/arm64 + Windows binaries into GitHub Releases. Install on a clean VPS:
 
@@ -127,7 +129,7 @@ Every `v*` git tag publishes Linux amd64/arm64 + Windows binaries into GitHub Re
 curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo bash
 ```
 
-That downloads the matching binary into `/home/drmsonic`, writes a systemd unit, opens port `7779`, and starts the service. Same shape as the o11 one-liner, without cloning source or installing a compiler. Run the same command again anytime to **upgrade** in place: it stops the service, replaces the binary, keeps `providers/`, rewrites the unit, and restarts.
+That downloads the matching binary into `/home/drmsonic`, writes a systemd unit, opens port `7779`, and starts the service. Run the same command again anytime to **upgrade** in place: it stops the service, replaces the binary, keeps `providers/`, rewrites the unit, and restarts.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -171,6 +173,22 @@ GitHub Actions builds the binaries and attaches them to that tag's Release page.
 5. Play `http://<host>:7779/stream/<provider>/<stream>/master.m3u8`.
 
 A stream is keyed by `ProviderId/StreamId`; both appear in the playback URL.
+
+## Auth
+
+Auth turns on when both `-user` and `-password` are set, or when any stored user has a non-empty password. With auth off, URLs stay plain:
+
+```
+http://host:7779/stream/channels/channel1/master.m3u8
+```
+
+With auth on, playlists and `app1.conf` embed credentials in the path:
+
+```
+hls://host:7779/username/password/stream/channels/channel1/master.m3u8
+```
+
+Panel users without `IsAdmin` only see providers listed in `ProviderIds`. Empty password fields on the Users page keep the stored password. See `CHANGELOG.md` for Phase 1 details.
 
 ## ClearKey keys
 

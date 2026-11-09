@@ -23,6 +23,26 @@ type actionRequest struct {
 	Raw          map[string]any   `json:"-"`
 }
 
+func (s *Server) actionAllowed(r *http.Request, action string) bool {
+	u, ok := s.currentUser(r)
+	if !ok {
+		return !s.authEnabled()
+	}
+	if u.IsAdmin {
+		return true
+	}
+	if !u.HasWebAccess {
+		return false
+	}
+	switch action {
+	case "getstatus", "getconf", "getmonitoring", "getrecordings", "getreplays", "getevents",
+		"start", "stop", "restart", "refresh", "refreshkeys", "flushkeys":
+		return true
+	default:
+		return false
+	}
+}
+
 func (r *actionRequest) userPayload() map[string]any {
 	if r.User != nil {
 		return r.User
@@ -38,9 +58,18 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid action", http.StatusInternalServerError)
 		return
 	}
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/json") {
+		http.Error(w, "unsupported media type", http.StatusUnsupportedMediaType)
+		return
+	}
+	if s.authEnabled() && !sameOrigin(r) && r.Header.Get("Authorization") == "" && r.Header.Get("X-Drmsonic-User") == "" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 
 	var raw map[string]any
-	dec := json.NewDecoder(r.Body)
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	dec.UseNumber()
 	if err := dec.Decode(&raw); err != nil {
 		http.Error(w, "bad request body", http.StatusInternalServerError)
@@ -74,6 +103,10 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 
 	if req.Action == "" {
 		http.Error(w, "invalid action", http.StatusInternalServerError)
+		return
+	}
+	if !s.actionAllowed(r, req.Action) {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -662,7 +695,9 @@ func (s *Server) acUpdateUser(w http.ResponseWriter, req actionRequest) {
 		}
 		found = true
 		if v, ok := src["Password"]; ok {
-			users[i].Password = str(v)
+			if pass := str(v); pass != "" && pass != "hidden" {
+				users[i].Password = pass
+			}
 		}
 		if v, ok := src["IsAdmin"]; ok {
 			users[i].IsAdmin = boolOf(v)

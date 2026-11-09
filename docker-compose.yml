@@ -8,4 +8,5 @@ services:
       - "7779:7779"
     volumes:
       - ./providers:/app/providers
-    command: ["-p", "7779", "-b", "0.0.0.0", "-providers", "providers", "-v", "1"]
+      - ./data:/app/data
+    command: ["-p", "7779", "-b", "0.0.0.0", "-providers", "providers", "-c", "data/drmsonic.json", "-v", "1"]

@@ -4,7 +4,7 @@ import "strings"
 
 const VersionName = "drmsonic"
 
-var VersionTag = "v1.0.0"
+var VersionTag = "v1.2.0-dev"
 
 const (
 	ModeLive   = "live"

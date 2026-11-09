@@ -190,19 +190,20 @@ func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *confi
 	}()
 
 	cfg := pipeline.Config{
-		Name:        st.Name,
-		ManifestURL: st.Manifest,
-		Mode:        st.Mode,
-		Video:       st.Video,
-		Audio:       st.Audio,
-		Keys:        st.Keys,
-		UserAgent:   prov.UserAgent,
-		Bind:        bindFor(prov, st),
-		Proxy:       proxyFor(prov, st),
-		Doh:         dohFor(prov, st),
-		Headers:     headersFor(prov, st),
-		Retries:     retriesFor(prov),
-		FixIVSize:   st.FixIvSize,
+		Name:         st.Name,
+		ManifestURL:  st.Manifest,
+		Mode:         st.Mode,
+		Video:        st.Video,
+		Audio:        st.Audio,
+		Keys:         st.Keys,
+		UserAgent:    prov.UserAgent,
+		Bind:         bindFor(prov, st),
+		Proxy:        proxyFor(prov, st),
+		Doh:          dohFor(prov, st),
+		Headers:      headersFor(prov, st),
+		Retries:      retriesFor(prov),
+		FixIVSize:    st.FixIvSize,
+		AllowPrivate: s.opts.AllowPrivate,
 	}
 
 	tracks := func(video, audio []pipeline.TrackInfo) {

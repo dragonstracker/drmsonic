@@ -33,19 +33,20 @@ type Callbacks struct {
 }
 
 type Config struct {
-	Name        string
-	ManifestURL string
-	Mode        string
-	Video       string
-	Audio       string
-	Keys        []string
-	UserAgent   string
-	Bind        string
-	Proxy       string
-	Doh         string
-	Headers     []string
-	Retries     int
-	FixIVSize   bool
+	Name         string
+	ManifestURL  string
+	Mode         string
+	Video        string
+	Audio        string
+	Keys         []string
+	UserAgent    string
+	Bind         string
+	Proxy        string
+	Doh          string
+	Headers      []string
+	Retries      int
+	FixIVSize    bool
+	AllowPrivate bool
 }
 
 type KeySet struct {
@@ -127,13 +128,14 @@ func decodeHex(s string) ([]byte, error) {
 
 func newClient(cfg Config) *fetch.Client {
 	return fetch.New(fetch.Options{
-		UserAgent: cfg.UserAgent,
-		Bind:      cfg.Bind,
-		Proxy:     cfg.Proxy,
-		Doh:       cfg.Doh,
-		Headers:   cfg.Headers,
-		Retries:   cfg.Retries,
-		Timeout:   25 * time.Second,
+		UserAgent:    cfg.UserAgent,
+		Bind:         cfg.Bind,
+		Proxy:        cfg.Proxy,
+		Doh:          cfg.Doh,
+		Headers:      cfg.Headers,
+		Retries:      cfg.Retries,
+		Timeout:      25 * time.Second,
+		AllowPrivate: cfg.AllowPrivate,
 	})
 }
 

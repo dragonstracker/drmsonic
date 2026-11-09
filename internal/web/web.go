@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -17,15 +18,17 @@ import (
 )
 
 type Options struct {
-	Bind        string
-	Port        int
-	BaseURL     string
-	Allow       string
-	User        string
-	Password    string
-	Providers   string
-	NoAutostart bool
-	AccessLog   bool
+	Bind           string
+	Port           int
+	BaseURL        string
+	Allow          string
+	User           string
+	Password       string
+	TrustedProxies string
+	Providers      string
+	NoAutostart    bool
+	AccessLog      bool
+	AllowPrivate   bool
 }
 
 type Server struct {
@@ -156,7 +159,8 @@ func New(opts Options, store *config.Store, mgr *state.Manager) (*Server, error)
 			}
 			return false
 		},
-		"fmtSize": func(n int) string { return fmt.Sprintf("%d", n) },
+		"fmtSize":    func(n int) string { return fmt.Sprintf("%d", n) },
+		"pathEscape": url.PathEscape,
 	}
 
 	tmpl, err := template.New("root").Funcs(funcs).ParseFS(ui.Templates(), "*.html")
@@ -198,22 +202,22 @@ func (s *Server) routes() {
 
 	m.HandleFunc("POST /api/action", s.handleAction)
 
-	m.HandleFunc("GET /{$}", s.handleIndex)
-	m.HandleFunc("GET /providers", s.handleIndex)
-	m.HandleFunc("GET /help", s.handleHelp)
-	m.HandleFunc("GET /monitoring", s.handleMonitoring)
-	m.HandleFunc("GET /users", s.handleUsers)
-	m.HandleFunc("GET /rec", s.handleRecordings)
-	m.HandleFunc("GET /records", s.handleRecordings)
-	m.HandleFunc("GET /debug", s.handleDebug)
-	m.HandleFunc("GET /debug/pprof/", s.handleDebug)
+	m.HandleFunc("GET /{$}", s.requirePanel(s.handleIndex))
+	m.HandleFunc("GET /providers", s.requirePanel(s.handleIndex))
+	m.HandleFunc("GET /help", s.requirePanel(s.handleHelp))
+	m.HandleFunc("GET /monitoring", s.requirePanel(s.handleMonitoring))
+	m.HandleFunc("GET /users", s.requireAdmin(s.handleUsers))
+	m.HandleFunc("GET /rec", s.requirePanel(s.handleRecordings))
+	m.HandleFunc("GET /records", s.requirePanel(s.handleRecordings))
+	m.HandleFunc("GET /debug", s.requireAdmin(s.handleDebug))
+	m.HandleFunc("GET /debug/pprof/", s.requireAdmin(s.handleDebug))
 
-	m.HandleFunc("GET /status", s.handleStatusIndex)
-	m.HandleFunc("GET /status/{provider}", s.handleStatus)
-	m.HandleFunc("GET /events", s.handleEventsIndex)
-	m.HandleFunc("GET /events/{provider}", s.handleEvents)
-	m.HandleFunc("GET /config", s.handleConfigIndex)
-	m.HandleFunc("GET /config/{provider}", s.handleConfig)
+	m.HandleFunc("GET /status", s.requirePanel(s.handleStatusIndex))
+	m.HandleFunc("GET /status/{provider}", s.requirePanel(s.handleStatus))
+	m.HandleFunc("GET /events", s.requirePanel(s.handleEventsIndex))
+	m.HandleFunc("GET /events/{provider}", s.requirePanel(s.handleEvents))
+	m.HandleFunc("GET /config", s.requireAdmin(s.handleConfigIndex))
+	m.HandleFunc("GET /config/{provider}", s.requireAdmin(s.handleConfig))
 
 	m.HandleFunc("GET /playlist.m3u", s.handleM3U("all"))
 	m.HandleFunc("GET /live.m3u", s.handleM3U("live"))
@@ -229,13 +233,17 @@ func (s *Server) routes() {
 }
 
 func (s *Server) Handler() http.Handler {
-	return s.logWrap(s.authWrap(s.mux))
+	return s.logWrap(s.pathAuthRewrite(s.authWrap(s.mux)))
 }
 
 func (s *Server) logWrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.opts.AccessLog {
-			log.Printf("%s %s %s", remoteIP(r), r.Method, r.URL.Path)
+			path := r.URL.Path
+			if parts := splitPath(path); len(parts) >= 3 && parts[2] == "stream" {
+				path = "/****/****/" + strings.Join(parts[2:], "/")
+			}
+			log.Printf("%s %s %s", clientIP(r, s.opts.TrustedProxies), r.Method, path)
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -253,6 +261,7 @@ func (s *Server) ListenAndServe() error {
 
 func (s *Server) basePage(r *http.Request) Page {
 	u, ok := s.currentUser(r)
+	providers := s.visibleProviders(r)
 	p := Page{
 		Version:      config.VersionName,
 		Tag:          config.VersionTag,
@@ -261,9 +270,9 @@ func (s *Server) basePage(r *http.Request) Page {
 		OutputModes:  config.OutputModes,
 		CdmTypes:     []string{config.CdmWidevine, config.CdmPlayReady, config.CdmVerimatrix},
 		ModeNames:    []string{config.ModeLive, config.ModeReplay, config.ModeVOD},
-		Providers:    s.store.Providers(),
+		Providers:    providers,
 	}
-	for _, prov := range s.store.Providers() {
+	for _, prov := range providers {
 		p.StreamsCount += len(prov.Streams)
 	}
 	if ok {
@@ -322,12 +331,4 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.handleIndex(w, r)
-}
-
-func remoteIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

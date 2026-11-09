@@ -30,6 +30,10 @@ func (s *Server) handleStatusIndex(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("provider")
+	if !s.canAccessProvider(r, id) {
+		http.Error(w, "invalid provider", http.StatusNotFound)
+		return
+	}
 	p := s.basePage(r)
 	prov := s.store.Provider(id)
 	if prov == nil {
@@ -56,6 +60,10 @@ func (s *Server) handleConfigIndex(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("provider")
+	if !s.canAccessProvider(r, id) {
+		http.Error(w, "invalid provider", http.StatusNotFound)
+		return
+	}
 	p := s.basePage(r)
 	prov := s.store.Provider(id)
 	if prov == nil {
@@ -82,6 +90,10 @@ func (s *Server) handleEventsIndex(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("provider")
+	if !s.canAccessProvider(r, id) {
+		http.Error(w, "invalid provider", http.StatusNotFound)
+		return
+	}
 	p := s.basePage(r)
 	prov := s.store.Provider(id)
 	if prov == nil {
@@ -145,15 +157,33 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "\n</pre></html>")
 }
 
+func (s *Server) streamCredPrefix(r *http.Request) string {
+	if u, p, ok := pathCreds(r); ok && p != "" {
+		return credPrefix(u, p)
+	}
+	u, ok := s.currentUser(r)
+	if !ok {
+		return ""
+	}
+	if u.Password != "" {
+		return credPrefix(u.Username, u.Password)
+	}
+	if s.opts.User != "" && u.Username == s.opts.User && s.opts.Password != "" {
+		return credPrefix(s.opts.User, s.opts.Password)
+	}
+	return ""
+}
+
 func (s *Server) handleApp1(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	host := strings.TrimPrefix(strings.TrimPrefix(s.baseFor(r), "http://"), "https://")
+	prefix := s.streamCredPrefix(r)
 	var b strings.Builder
-	for _, p := range s.store.Providers() {
+	for _, p := range s.visibleProviders(r) {
 		for i := range p.Streams {
 			st := &p.Streams[i]
 			fmt.Fprintf(&b, "stream %s_%s {\n", p.Id, st.Id)
-			fmt.Fprintf(&b, "\turl hls://%s/stream/%s/%s/master.m3u8;\n", host, p.Id, st.Id)
+			fmt.Fprintf(&b, "\turl hls://%s%s/stream/%s/%s/master.m3u8;\n", host, prefix, p.Id, st.Id)
 			fmt.Fprintf(&b, "\ttitle \"[%s] %s\";\n", p.Id, st.Name)
 			fmt.Fprintf(&b, "}\n\n")
 		}
@@ -164,17 +194,12 @@ func (s *Server) handleApp1(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleM3U(scope string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-mpegurl")
-		user := r.URL.Query().Get("user")
-		suffix := ""
-		if user != "" {
-			suffix = "?user=" + user
-		}
-
+		prefix := s.streamCredPrefix(r)
 		var b strings.Builder
 		b.WriteString("#EXTM3U x-tvg-url=\"\"\n\n")
 		base := s.baseFor(r)
 
-		for _, p := range s.store.Providers() {
+		for _, p := range s.visibleProviders(r) {
 			for i := range p.Streams {
 				st := &p.Streams[i]
 				if scope == "live" && st.Mode != config.ModeLive {
@@ -188,7 +213,7 @@ func (s *Server) handleM3U(scope string) http.HandlerFunc {
 				}
 				fmt.Fprintf(&b, "#EXTINF:1 group-title=\"%s\" tvg-id=\"%s/%s\" tvg-logo=\"\" provider=\"%s\" provider-logo=\"\" provider-type=\"iptv\",[%s] %s\n",
 					p.Id, p.Id, st.Id, p.Id, p.Id, st.Name)
-				fmt.Fprintf(&b, "%s/stream/%s/%s/master.m3u8%s\n\n", base, p.Id, st.Id, suffix)
+				fmt.Fprintf(&b, "%s%s/stream/%s/%s/master.m3u8\n\n", base, prefix, p.Id, st.Id)
 			}
 		}
 		fmt.Fprint(w, b.String())
@@ -316,6 +341,10 @@ func (s *Server) awaitSegments(r *http.Request, prov *config.Provider, st *confi
 func (s *Server) streamFromPath(w http.ResponseWriter, r *http.Request) (*config.Provider, *config.Stream) {
 	pid := r.PathValue("provider")
 	sid := r.PathValue("stream")
+	if !s.canAccessProvider(r, pid) {
+		http.Error(w, "invalid provider", http.StatusNotFound)
+		return nil, nil
+	}
 	prov := s.store.Provider(pid)
 	if prov == nil {
 		http.Error(w, "invalid provider", http.StatusNotFound)

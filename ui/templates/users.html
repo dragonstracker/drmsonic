@@ -38,7 +38,7 @@
 					</TD>
 					<TD style='text-align:center; vertical-align:middle; width:250px'>
 						<div id="passwordDiv{{$n}}">
-							<input class="form-control" placeholder="password" aria-label="password" id="password{{$n}}" type="text" value="hidden"/>
+							<input class="form-control" placeholder="new password" aria-label="password" id="password{{$n}}" type="password" value=""/>
 						</div>
 					</TD>
 					<TD style='text-align:center; vertical-align:middle; width:250px'>
@@ -70,11 +70,19 @@
 									PLAYLIST
 								</button>
 								<ul class="dropdown-menu">
-									<li><a class="dropdown-item" href="playlist.m3u?user={{$s.Username}}">Full</a></li>
-									<li><a class="dropdown-item" href="live.m3u?user={{$s.Username}}">Live</a></li>
-									<li><a class="dropdown-item" href="event.m3u?user={{$s.Username}}">Events</a></li>
-									<li><a class="dropdown-item" href="replay.m3u?user={{$s.Username}}">Replays</a></li>
-									<li><a class="dropdown-item" href="app1.conf?user={{$s.Username}}">App1</a></li>
+									{{ if $s.Password }}
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/playlist.m3u">Full</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/live.m3u">Live</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/event.m3u">Events</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/replay.m3u">Replays</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/app1.conf">App1</a></li>
+									{{ else }}
+									<li><a class="dropdown-item" href="playlist.m3u">Full</a></li>
+									<li><a class="dropdown-item" href="live.m3u">Live</a></li>
+									<li><a class="dropdown-item" href="event.m3u">Events</a></li>
+									<li><a class="dropdown-item" href="replay.m3u">Replays</a></li>
+									<li><a class="dropdown-item" href="app1.conf">App1</a></li>
+									{{ end }}
 								</ul>
 							</div>
 							&nbsp;&nbsp;
