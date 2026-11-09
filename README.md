@@ -205,12 +205,20 @@ curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/i
 Developer branch (rolling prerelease tag `dev`, updated on every `devloper` push):
 
 ```sh
-DRMSONIC_TAG=dev curl -fsSL https://github.com/dragonstracker/drmsonic/releases/download/dev/install.sh | sudo -E bash
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/download/dev/install.sh | sudo bash
 ```
 
-The panel must show `drmsonic dev-<sha>` (for example `dev-7f9d15a`). If it still says `v1.1.x`, the VPS pulled production `latest` — re-run the command above with `DRMSONIC_TAG=dev` and `-E` so sudo keeps the env var.
+The `dev` release’s `install.sh` defaults to the `dev` binary. The panel must show `drmsonic dev-<sha>`. If it still says `v1.1.x`, you pulled production `latest` — use the URL above (not `releases/latest`).
 
-Same upgrade/wipe scripts work with `DRMSONIC_TAG=dev`.
+```sh
+# wrong: VAR= only applies to curl, not the piped bash
+DRMSONIC_TAG=dev curl ... | sudo -E bash
+
+# right if you need to override the tag explicitly
+curl -fsSL .../dev/install.sh | sudo DRMSONIC_TAG=dev bash
+```
+
+Same upgrade/wipe scripts work with the `dev` installer.
 
 ## ClearKey keys
 

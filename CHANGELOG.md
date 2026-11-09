@@ -36,6 +36,7 @@ Versions follow the release tags on GitHub.
 - Default `admin` / `admin` on first install when no passwords exist (changeable under Users).
 - Video track option **All qualities** alongside Best and per-rendition ids.
 - Install prints binary version, verifies `dev-*` when `DRMSONIC_TAG=dev`, seeds admin on fresh installs.
+- `dev` release `install.sh` defaults `DRMSONIC_TAG` to `dev` (avoids accidental `latest` / v1.1.x installs).
 
 ### Changed
 - SAVE USERS flushes every row from the form before persisting (password no longer lost if the field was not blurred).
