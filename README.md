@@ -142,6 +142,14 @@ That downloads the matching binary into `/home/drmsonic`, writes a systemd unit,
 DRMSONIC_PORT=8080 curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo -E bash
 ```
 
+Full wipe (stop service, drop unit, close ufw, delete `/home/drmsonic` and leftovers):
+
+```sh
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/uninstall.sh | sudo bash
+```
+
+Same overrides as install: `DRMSONIC_DIR`, `DRMSONIC_PORT`, `DRMSONIC_SERVICE`, `DRMSONIC_CONTAINER`.
+
 Day two: `systemctl restart drmsonic`, `journalctl -u drmsonic -f`, `systemctl status drmsonic`.
 
 Publish a new release from this repo:
