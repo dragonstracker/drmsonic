@@ -1,6 +1,10 @@
 package config
 
-import "strings"
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"strings"
+)
 
 const VersionName = "drmsonic"
 
@@ -247,6 +251,7 @@ func (p *Provider) EffectiveOutputMode() string {
 type User struct {
 	Username     string   `json:"Username"`
 	Password     string   `json:"Password"`
+	StreamToken  string   `json:"StreamToken"`
 	ProviderIds  []string `json:"ProviderIds"`
 	Network      string   `json:"Network"`
 	IsAdmin      bool     `json:"IsAdmin"`
@@ -261,6 +266,25 @@ func (u User) NetworkList() []string {
 		}
 	}
 	return out
+}
+
+func NewStreamToken() string {
+	var b [24]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return hex.EncodeToString([]byte("fallback-token-needs-entropy"))
+	}
+	return hex.EncodeToString(b[:])
+}
+
+func EnsureUserTokens(users []User) ([]User, bool) {
+	changed := false
+	for i := range users {
+		if users[i].StreamToken == "" && users[i].Password != "" {
+			users[i].StreamToken = NewStreamToken()
+			changed = true
+		}
+	}
+	return users, changed
 }
 
 type Config struct {

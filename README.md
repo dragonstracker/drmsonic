@@ -176,19 +176,34 @@ A stream is keyed by `ProviderId/StreamId`; both appear in the playback URL.
 
 ## Auth
 
-Auth turns on when both `-user` and `-password` are set, or when any stored user has a non-empty password. With auth off, URLs stay plain:
+Auth turns on when both `-user` and `-password` are set, or when any stored user has a non-empty password.
+
+- Panel: browser login form at `/login` (session cookie). Logout via the top bar.
+- Playlists: opaque tokens, never username/password in the URL:
 
 ```
-http://host:7779/stream/channels/channel1/master.m3u8
+hls://host:7779/t/<stream-token>/stream/channels/channel1/master.m3u8
 ```
 
-With auth on, playlists and `app1.conf` embed credentials in the path:
+Tokens are random per user (Users page → Playlist menu). Guessing a username does not grant playlist access. Failed logins are rate-limited per IP.
 
-```
-hls://host:7779/username/password/stream/channels/channel1/master.m3u8
+With auth off, URLs stay plain: `http://host:7779/stream/...`.
+
+### Test `devloper` builds on a VPS
+
+Production (`main` tags → latest):
+
+```sh
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo bash
 ```
 
-Panel users without `IsAdmin` only see providers listed in `ProviderIds`. Empty password fields on the Users page keep the stored password. See `CHANGELOG.md` for Phase 1 details.
+Developer branch (rolling prerelease tag `dev`, updated on every `devloper` push):
+
+```sh
+DRMSONIC_TAG=dev curl -fsSL https://github.com/dragonstracker/drmsonic/releases/download/dev/install.sh | sudo -E bash
+```
+
+Same upgrade/wipe scripts work with `DRMSONIC_TAG=dev`.
 
 ## ClearKey keys
 

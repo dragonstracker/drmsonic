@@ -2,7 +2,10 @@ package web
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"net"
 	"net/http"
 	"net/url"
@@ -36,8 +39,19 @@ func (s *Server) authEnabled() bool {
 	return false
 }
 
+func (s *Server) publicPath(path string) bool {
+	if path == "/login" || strings.HasPrefix(path, "/static/") {
+		return true
+	}
+	return false
+}
+
 func (s *Server) authWrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.publicPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if u, ok := s.resolveUser(r); ok {
 			next.ServeHTTP(w, r.WithContext(withUser(r.Context(), u)))
 			return
@@ -48,9 +62,20 @@ func (s *Server) authWrap(next http.Handler) http.Handler {
 			})))
 			return
 		}
-		w.Header().Set("WWW-Authenticate", `Basic realm="drmsonic"`)
+		if wantsHTML(r) {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	})
+}
+
+func wantsHTML(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	accept := r.Header.Get("Accept")
+	return strings.Contains(accept, "text/html") || accept == "" || strings.Contains(accept, "*/*")
 }
 
 func (s *Server) resolveUser(r *http.Request) (config.User, bool) {
@@ -58,14 +83,52 @@ func (s *Server) resolveUser(r *http.Request) (config.User, bool) {
 	if s.allowListed(ip) {
 		return config.User{Username: "allow", IsAdmin: true, HasWebAccess: true}, true
 	}
-	if u, p, ok := pathCreds(r); ok {
-		if user, ok := s.authenticate(u, p, ip); ok {
-			return user, true
+	if tok, ok := pathToken(r); ok {
+		return s.userFromStreamToken(tok, ip)
+	}
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		if name, ok := s.sessions.get(c.Value); ok {
+			if u, ok := s.userByName(name, ip); ok {
+				return u, true
+			}
 		}
-		return config.User{}, false
 	}
 	if u, p, ok := r.BasicAuth(); ok {
 		return s.authenticate(u, p, ip)
+	}
+	return config.User{}, false
+}
+
+func (s *Server) userFromStreamToken(token, ip string) (config.User, bool) {
+	if s.staticToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.staticToken)) == 1 {
+		return config.User{
+			Username: s.opts.User, IsAdmin: true, HasWebAccess: true, StreamToken: s.staticToken,
+		}, true
+	}
+	u, ok := s.store.UserByToken(token)
+	if !ok {
+		return config.User{}, false
+	}
+	if u.Network != "" && !networkAllows(u.NetworkList(), ip) {
+		return config.User{}, false
+	}
+	return u, true
+}
+
+func (s *Server) userByName(name, ip string) (config.User, bool) {
+	if s.checkStatic(name, s.opts.Password) && name == s.opts.User {
+		return config.User{
+			Username: name, IsAdmin: true, HasWebAccess: true, StreamToken: s.staticToken, Password: s.opts.Password,
+		}, true
+	}
+	for _, u := range s.store.Users() {
+		if u.Username != name {
+			continue
+		}
+		if u.Network != "" && !networkAllows(u.NetworkList(), ip) {
+			return config.User{}, false
+		}
+		return u, true
 	}
 	return config.User{}, false
 }
@@ -75,7 +138,9 @@ func (s *Server) authenticate(name, pass, ip string) (config.User, bool) {
 		return config.User{}, false
 	}
 	if s.checkStatic(name, pass) {
-		return config.User{Username: name, IsAdmin: true, HasWebAccess: true}, true
+		return config.User{
+			Username: name, IsAdmin: true, HasWebAccess: true, StreamToken: s.staticToken, Password: pass,
+		}, true
 	}
 	for _, u := range s.store.Users() {
 		if u.Username != name {
@@ -187,11 +252,11 @@ func splitCSV(s string) []string {
 	return out
 }
 
-func pathCreds(r *http.Request) (user, pass string, ok bool) {
-	if v := r.Header.Get("X-Drmsonic-User"); v != "" {
-		return v, r.Header.Get("X-Drmsonic-Pass"), true
+func pathToken(r *http.Request) (string, bool) {
+	if v := r.Header.Get("X-Drmsonic-Token"); v != "" {
+		return v, true
 	}
-	return "", "", false
+	return "", false
 }
 
 func clientIP(r *http.Request, trustedProxies string) string {
@@ -215,43 +280,40 @@ func remoteIP(r *http.Request) string {
 	return clientIP(r, "")
 }
 
-func credPrefix(user, pass string) string {
+func tokenPrefix(token string) string {
+	if token == "" {
+		return ""
+	}
+	return "/t/" + url.PathEscape(token)
+}
+
+func deriveStaticToken(user, pass, secret string) string {
 	if user == "" || pass == "" {
 		return ""
 	}
-	return "/" + url.PathEscape(user) + "/" + url.PathEscape(pass)
+	key := []byte(secret)
+	if len(key) == 0 {
+		key = []byte("drmsonic-static-token")
+	}
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(user))
+	mac.Write([]byte{0})
+	mac.Write([]byte(pass))
+	return hex.EncodeToString(mac.Sum(nil)[:24])
 }
 
 func (s *Server) pathAuthRewrite(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		escaped := r.URL.EscapedPath()
-		parts := splitPath(escaped)
-		if len(parts) >= 3 && parts[2] == "stream" {
-			user, err1 := url.PathUnescape(parts[0])
-			pass, err2 := url.PathUnescape(parts[1])
-			if err1 == nil && err2 == nil && user != "" && pass != "" {
+		parts := splitPath(r.URL.EscapedPath())
+		if len(parts) >= 3 && parts[0] == "t" {
+			tok, err := url.PathUnescape(parts[1])
+			if err == nil && tok != "" {
 				rest := "/" + strings.Join(parts[2:], "/")
 				r2 := r.Clone(r.Context())
 				r2.URL.Path = rest
-				r2.Header.Set("X-Drmsonic-User", user)
-				r2.Header.Set("X-Drmsonic-Pass", pass)
+				r2.Header.Set("X-Drmsonic-Token", tok)
 				next.ServeHTTP(w, r2)
 				return
-			}
-		}
-		if len(parts) == 3 {
-			leaf := parts[2]
-			if leaf == "playlist.m3u" || leaf == "live.m3u" || leaf == "event.m3u" || leaf == "replay.m3u" || leaf == "app1.conf" {
-				user, err1 := url.PathUnescape(parts[0])
-				pass, err2 := url.PathUnescape(parts[1])
-				if err1 == nil && err2 == nil && user != "" && pass != "" {
-					r2 := r.Clone(r.Context())
-					r2.URL.Path = "/" + leaf
-					r2.Header.Set("X-Drmsonic-User", user)
-					r2.Header.Set("X-Drmsonic-Pass", pass)
-					next.ServeHTTP(w, r2)
-					return
-				}
 			}
 		}
 		next.ServeHTTP(w, r)
@@ -300,4 +362,50 @@ func sameOrigin(r *http.Request) bool {
 		return err == nil && u.Host == host
 	}
 	return false
+}
+
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if !s.authEnabled() {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	if r.Method == http.MethodGet {
+		s.renderLogin(w, "")
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	ip := clientIP(r, s.opts.TrustedProxies)
+	if s.throttle.blocked(ip) {
+		s.renderLogin(w, "Too many attempts. Try again later.")
+		return
+	}
+	_ = r.ParseForm()
+	user := strings.TrimSpace(r.FormValue("username"))
+	pass := r.FormValue("password")
+	u, ok := s.authenticate(user, pass, ip)
+	if !ok {
+		s.throttle.record(ip)
+		s.renderLogin(w, "Invalid username or password.")
+		return
+	}
+	s.throttle.clear(ip)
+	id, exp := s.sessions.create(u.Username)
+	setSessionCookie(w, id, exp)
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		s.sessions.revoke(c.Value)
+	}
+	clearSessionCookie(w)
+	http.Redirect(w, r, "/login", http.StatusFound)
+}
+
+func (s *Server) renderLogin(w http.ResponseWriter, errMsg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = s.tmpl.ExecuteTemplate(w, "login.html", map[string]string{"Error": errMsg})
 }

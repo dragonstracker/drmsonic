@@ -70,18 +70,14 @@
 									PLAYLIST
 								</button>
 								<ul class="dropdown-menu">
-									{{ if $s.Password }}
-									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/playlist.m3u">Full</a></li>
-									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/live.m3u">Live</a></li>
-									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/event.m3u">Events</a></li>
-									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/replay.m3u">Replays</a></li>
-									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/app1.conf">App1</a></li>
+									{{ if $s.StreamToken }}
+									<li><a class="dropdown-item" href="t/{{pathEscape $s.StreamToken}}/playlist.m3u">Full</a></li>
+									<li><a class="dropdown-item" href="t/{{pathEscape $s.StreamToken}}/live.m3u">Live</a></li>
+									<li><a class="dropdown-item" href="t/{{pathEscape $s.StreamToken}}/event.m3u">Events</a></li>
+									<li><a class="dropdown-item" href="t/{{pathEscape $s.StreamToken}}/replay.m3u">Replays</a></li>
+									<li><a class="dropdown-item" href="t/{{pathEscape $s.StreamToken}}/app1.conf">App1</a></li>
 									{{ else }}
-									<li><a class="dropdown-item" href="playlist.m3u">Full</a></li>
-									<li><a class="dropdown-item" href="live.m3u">Live</a></li>
-									<li><a class="dropdown-item" href="event.m3u">Events</a></li>
-									<li><a class="dropdown-item" href="replay.m3u">Replays</a></li>
-									<li><a class="dropdown-item" href="app1.conf">App1</a></li>
+									<li><span class="dropdown-item disabled">Set a password to unlock links</span></li>
 									{{ end }}
 								</ul>
 							</div>

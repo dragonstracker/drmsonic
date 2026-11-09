@@ -1,0 +1,34 @@
+<html>
+	<head>
+		<title>DRMSONIC Login</title>
+		<meta charset="utf-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1"/>
+		<link href="static/bootstrap.min.css" rel="stylesheet"/>
+		<link href="static/drmsonic.css" rel="stylesheet"/>
+		<link href="static/drmsonic.ico" rel="icon"/>
+		<style>
+			body { display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; background:#000; color:#fff; }
+			.login-box { width:100%; max-width:360px; padding:28px; border:1px solid #333; border-radius:8px; background:#111; }
+			.login-box h1 { font-size:1.25rem; margin:0 0 4px; letter-spacing:0.08em; }
+			.login-box p { color:#888; font-size:0.85rem; margin:0 0 20px; }
+			.login-box label { font-size:0.8rem; color:#aaa; }
+			.login-box .form-control { background:#1a1a1a; border-color:#333; color:#fff; margin-bottom:12px; }
+			.login-box .btn { width:100%; margin-top:8px; }
+			.err { color:#f66; font-size:0.85rem; margin-bottom:12px; min-height:1.2em; }
+		</style>
+	</head>
+	<body>
+		<div class="login-box">
+			<h1>DRMSONIC</h1>
+			<p>Sign in to continue</p>
+			{{ if .Error }}<div class="err">{{ .Error }}</div>{{ else }}<div class="err"></div>{{ end }}
+			<form method="POST" action="/login" autocomplete="off">
+				<label for="username">Username</label>
+				<input class="form-control" id="username" name="username" type="text" required autofocus/>
+				<label for="password">Password</label>
+				<input class="form-control" id="password" name="password" type="password" required/>
+				<button class="btn btn-primary" type="submit">Login</button>
+			</form>
+		</div>
+	</body>
+</html>

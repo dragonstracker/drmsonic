@@ -22,6 +22,7 @@ func main() {
 		confFile       = flag.String("c", "drmsonic.json", "Config file.")
 		user           = flag.String("user", "", "Static admin user.")
 		password       = flag.String("password", "", "Static admin password.")
+		sessionSecret  = flag.String("session-secret", "", "Secret for static stream token and sessions.")
 		allow          = flag.String("allow", "", "List of no-auth admin source ip addresses.")
 		trustedProxies = flag.String("trusted-proxies", "", "Proxies allowed to set X-Forwarded-For.")
 		allowPrivate   = flag.Bool("allow-private-fetch", false, "Allow fetch of private/loopback URLs.")
@@ -74,6 +75,7 @@ func main() {
 		Allow:          *allow,
 		User:           *user,
 		Password:       *password,
+		SessionSecret:  *sessionSecret,
 		TrustedProxies: *trustedProxies,
 		AllowPrivate:   *allowPrivate,
 		Providers:      *providers,

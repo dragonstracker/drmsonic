@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,7 +33,21 @@ func NewStore(dir, confPath string) (*Store, error) {
 	if err := s.Load(); err != nil {
 		return nil, err
 	}
+	if err := s.EnsureTokensPersisted(); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+func (s *Store) EnsureTokensPersisted() error {
+	s.mu.Lock()
+	users, changed := EnsureUserTokens(s.users)
+	s.users = users
+	s.mu.Unlock()
+	if !changed {
+		return nil
+	}
+	return s.SaveUsers()
 }
 
 func (s *Store) Dir() string {
@@ -83,7 +98,7 @@ func (s *Store) Load() error {
 		if raw, err := os.ReadFile(s.confPath); err == nil {
 			var c Config
 			if json.Unmarshal(raw, &c) == nil {
-				s.users = c.Users
+				s.users, _ = EnsureUserTokens(c.Users)
 			}
 		}
 	}
@@ -164,8 +179,26 @@ func (s *Store) Users() []User {
 
 func (s *Store) SetUsers(u []User) {
 	s.mu.Lock()
-	s.users = u
+	users, _ := EnsureUserTokens(u)
+	s.users = users
 	s.mu.Unlock()
+}
+
+func (s *Store) UserByToken(token string) (User, bool) {
+	if token == "" {
+		return User{}, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, u := range s.users {
+		if u.StreamToken == "" {
+			continue
+		}
+		if subtle.ConstantTimeCompare([]byte(u.StreamToken), []byte(token)) == 1 {
+			return u, true
+		}
+	}
+	return User{}, false
 }
 
 func (s *Store) Put(p *Provider) error {

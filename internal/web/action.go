@@ -63,7 +63,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unsupported media type", http.StatusUnsupportedMediaType)
 		return
 	}
-	if s.authEnabled() && !sameOrigin(r) && r.Header.Get("Authorization") == "" && r.Header.Get("X-Drmsonic-User") == "" {
+	if s.authEnabled() && !sameOrigin(r) && r.Header.Get("Authorization") == "" && r.Header.Get("X-Drmsonic-Token") == "" {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -670,9 +670,15 @@ func (s *Server) acAddUser(w http.ResponseWriter, req actionRequest) {
 			return
 		}
 	}
+	pass := str(mapGet(src, "Password"))
+	tok := ""
+	if pass != "" {
+		tok = config.NewStreamToken()
+	}
 	users = append(users, config.User{
 		Username:     name,
-		Password:     str(mapGet(src, "Password")),
+		Password:     pass,
+		StreamToken:  tok,
 		IsAdmin:      boolOf(mapGet(src, "IsAdmin")),
 		HasWebAccess: boolOf(mapGet(src, "HasWebAccess")),
 	})
@@ -697,7 +703,13 @@ func (s *Server) acUpdateUser(w http.ResponseWriter, req actionRequest) {
 		if v, ok := src["Password"]; ok {
 			if pass := str(v); pass != "" && pass != "hidden" {
 				users[i].Password = pass
+				if users[i].StreamToken == "" {
+					users[i].StreamToken = config.NewStreamToken()
+				}
 			}
+		}
+		if users[i].Password != "" && users[i].StreamToken == "" {
+			users[i].StreamToken = config.NewStreamToken()
 		}
 		if v, ok := src["IsAdmin"]; ok {
 			users[i].IsAdmin = boolOf(v)

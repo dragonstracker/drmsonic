@@ -24,6 +24,7 @@ type Options struct {
 	Allow          string
 	User           string
 	Password       string
+	SessionSecret  string
 	TrustedProxies string
 	Providers      string
 	NoAutostart    bool
@@ -32,17 +33,20 @@ type Options struct {
 }
 
 type Server struct {
-	opts   Options
-	store  *config.Store
-	mgr    *state.Manager
-	tmpl   *template.Template
-	mux    *http.ServeMux
-	static http.Handler
-	media  *mediaStore
-	run    *channelRuntime
-	start  time.Time
-	stop   chan struct{}
-	once   sync.Once
+	opts        Options
+	store       *config.Store
+	mgr         *state.Manager
+	tmpl        *template.Template
+	mux         *http.ServeMux
+	static      http.Handler
+	media       *mediaStore
+	run         *channelRuntime
+	sessions    *sessionStore
+	throttle    *loginThrottle
+	staticToken string
+	start       time.Time
+	stop        chan struct{}
+	once        sync.Once
 }
 
 type Page struct {
@@ -169,16 +173,19 @@ func New(opts Options, store *config.Store, mgr *state.Manager) (*Server, error)
 	}
 
 	s := &Server{
-		opts:   opts,
-		store:  store,
-		mgr:    mgr,
-		tmpl:   tmpl,
-		mux:    http.NewServeMux(),
-		static: http.FileServer(http.FS(ui.Static())),
-		media:  newMediaStore(),
-		run:    newRuntime(),
-		start:  time.Now(),
-		stop:   make(chan struct{}),
+		opts:        opts,
+		store:       store,
+		mgr:         mgr,
+		tmpl:        tmpl,
+		mux:         http.NewServeMux(),
+		static:      http.FileServer(http.FS(ui.Static())),
+		media:       newMediaStore(),
+		run:         newRuntime(),
+		sessions:    newSessionStore(),
+		throttle:    newLoginThrottle(),
+		staticToken: deriveStaticToken(opts.User, opts.Password, opts.SessionSecret),
+		start:       time.Now(),
+		stop:        make(chan struct{}),
 	}
 	s.routes()
 	go s.onDemandLoop()
@@ -199,6 +206,11 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /static/", func(w http.ResponseWriter, r *http.Request) {
 		http.StripPrefix("/static/", s.static).ServeHTTP(w, r)
 	})
+
+	m.HandleFunc("GET /login", s.handleLogin)
+	m.HandleFunc("POST /login", s.handleLogin)
+	m.HandleFunc("POST /logout", s.handleLogout)
+	m.HandleFunc("GET /logout", s.handleLogout)
 
 	m.HandleFunc("POST /api/action", s.handleAction)
 

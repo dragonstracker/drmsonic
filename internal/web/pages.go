@@ -158,18 +158,18 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) streamCredPrefix(r *http.Request) string {
-	if u, p, ok := pathCreds(r); ok && p != "" {
-		return credPrefix(u, p)
+	if tok, ok := pathToken(r); ok && tok != "" {
+		return tokenPrefix(tok)
 	}
 	u, ok := s.currentUser(r)
 	if !ok {
 		return ""
 	}
-	if u.Password != "" {
-		return credPrefix(u.Username, u.Password)
+	if u.StreamToken != "" {
+		return tokenPrefix(u.StreamToken)
 	}
-	if s.opts.User != "" && u.Username == s.opts.User && s.opts.Password != "" {
-		return credPrefix(s.opts.User, s.opts.Password)
+	if s.staticToken != "" && u.Username == s.opts.User {
+		return tokenPrefix(s.staticToken)
 	}
 	return ""
 }

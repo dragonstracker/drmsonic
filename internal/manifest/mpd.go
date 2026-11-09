@@ -117,6 +117,7 @@ type Track struct {
 	FrameRate   string
 	Bandwidth   int
 	Lang        string
+	Default     bool
 	Rate        int
 	Channels    int
 	Timescale   int64

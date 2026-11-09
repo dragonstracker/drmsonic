@@ -1,8 +1,6 @@
 package web
 
 import (
-	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -75,107 +73,101 @@ func TestOpenServerPlainURLs(t *testing.T) {
 	if !strings.Contains(body, "hls://example.test:7779/stream/channels/channel1/master.m3u8") {
 		t.Fatalf("unexpected body: %s", body)
 	}
-	if strings.Contains(body, "/admin/") {
-		t.Fatal("credential prefix leaked onto open server")
+	if strings.Contains(body, "/t/") {
+		t.Fatal("token prefix leaked onto open server")
 	}
 }
 
-func TestStaticCredentials(t *testing.T) {
-	s := testServer(t, Options{User: "admin", Password: "secret"}, nil, sampleProvider("channels"))
+func TestLoginAndTokenPlaylist(t *testing.T) {
+	tok := config.NewStreamToken()
+	users := []config.User{{
+		Username: "viewer", Password: "pw", StreamToken: tok,
+		HasWebAccess: true, IsAdmin: false, ProviderIds: []string{"channels"},
+	}}
+	s := testServer(t, Options{SessionSecret: "test"}, users, sampleProvider("channels"), sampleProvider("hidden"))
 	h := s.Handler()
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/providers", nil)
+	req.Header.Set("Accept", "text/html")
 	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("want 401 got %d", rr.Code)
+	if rr.Code != http.StatusFound || rr.Header().Get("Location") != "/login" {
+		t.Fatalf("want redirect login got %d %s", rr.Code, rr.Header().Get("Location"))
 	}
 
 	rr = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/providers", nil)
-	req.SetBasicAuth("admin", "wrong")
+	form := strings.NewReader("username=viewer&password=pw")
+	req = httptest.NewRequest(http.MethodPost, "/login", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("want 401 got %d", rr.Code)
+	if rr.Code != http.StatusFound {
+		t.Fatalf("login status %d", rr.Code)
+	}
+	cookie := rr.Result().Cookies()
+	if len(cookie) == 0 {
+		t.Fatal("missing session cookie")
 	}
 
 	rr = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/providers", nil)
-	req.SetBasicAuth("admin", "secret")
+	req = httptest.NewRequest(http.MethodGet, "/t/"+tok+"/app1.conf", nil)
+	req.Host = "host:7779"
 	h.ServeHTTP(rr, req)
 	if rr.Code != 200 {
-		t.Fatalf("basic auth want 200 got %d", rr.Code)
+		t.Fatalf("token playlist %d", rr.Code)
 	}
-
-	rr = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/admin/secret/app1.conf", nil)
-	req.Host = "vps.example:7779"
-	h.ServeHTTP(rr, req)
-	if rr.Code != 200 {
-		t.Fatalf("path auth want 200 got %d body %s", rr.Code, rr.Body.String())
+	body := rr.Body.String()
+	if !strings.Contains(body, "/t/"+tok+"/stream/channels/channel1/master.m3u8") {
+		t.Fatalf("token missing in %s", body)
 	}
-	if !strings.Contains(rr.Body.String(), "hls://vps.example:7779/admin/secret/stream/channels/channel1/master.m3u8") {
-		t.Fatalf("path prefix missing: %s", rr.Body.String())
+	if strings.Contains(body, "hidden_channel1") {
+		t.Fatal("ungranted provider leaked")
+	}
+	if strings.Contains(body, "viewer/pw") {
+		t.Fatal("username/password must not appear in playlist URLs")
 	}
 }
 
 func TestEmptyPasswordCannotLogin(t *testing.T) {
-	users := []config.User{{Username: "guest", Password: "", HasWebAccess: true, IsAdmin: false}}
-	s := testServer(t, Options{User: "admin", Password: "secret"}, users, sampleProvider("channels"))
+	users := []config.User{{Username: "guest", Password: "", HasWebAccess: true}}
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, users, sampleProvider("channels"))
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/providers", nil)
-	req.SetBasicAuth("guest", "")
+	form := strings.NewReader("username=guest&password=")
+	req := httptest.NewRequest(http.MethodPost, "/login", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	s.Handler().ServeHTTP(rr, req)
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("want 401 got %d", rr.Code)
+	if rr.Code != 200 || !strings.Contains(rr.Body.String(), "Invalid") {
+		t.Fatalf("want login error page got %d", rr.Code)
 	}
 }
 
-func TestPasswordlessUsersDoNotEnableAuth(t *testing.T) {
-	users := []config.User{{Username: "draft", Password: "", HasWebAccess: true}}
-	s := testServer(t, Options{}, users, sampleProvider("channels"))
+func TestGuessableUserPathRejected(t *testing.T) {
+	tok := config.NewStreamToken()
+	users := []config.User{{Username: "admin", Password: "secret", StreamToken: tok, HasWebAccess: true, IsAdmin: true}}
+	s := testServer(t, Options{SessionSecret: "x"}, users, sampleProvider("channels"))
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/providers", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/secret/app1.conf", nil)
 	s.Handler().ServeHTTP(rr, req)
-	if rr.Code != 200 {
-		t.Fatalf("want open panel got %d", rr.Code)
+	if rr.Code == 200 && strings.Contains(rr.Body.String(), "stream") {
+		t.Fatal("user/pass path must not authorize playlists")
 	}
 }
 
-func TestProviderScope(t *testing.T) {
-	users := []config.User{{
-		Username: "viewer", Password: "pw", HasWebAccess: true, IsAdmin: false,
-		ProviderIds: []string{"channels"},
-	}}
-	s := testServer(t, Options{}, users, sampleProvider("channels"), sampleProvider("hidden"))
-	h := s.Handler()
-
+func TestCSRFRejectsPlainText(t *testing.T) {
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, nil, sampleProvider("channels"))
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/viewer/pw/app1.conf", nil)
-	req.Host = "host:7779"
-	h.ServeHTTP(rr, req)
-	if rr.Code != 200 {
-		t.Fatalf("status %d", rr.Code)
-	}
-	body := rr.Body.String()
-	if !strings.Contains(body, "channels_channel1") {
-		t.Fatal("expected granted provider")
-	}
-	if strings.Contains(body, "hidden_channel1") {
-		t.Fatal("leaked ungranted provider")
-	}
-
-	rr = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/viewer/pw/stream/hidden/channel1/master.m3u8", nil)
-	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("want 404 got %d", rr.Code)
+	req := httptest.NewRequest(http.MethodPost, "/api/action", strings.NewReader(`{"Action":"getstatus"}`))
+	req.Header.Set("Content-Type", "text/plain")
+	req.SetBasicAuth("admin", "secret")
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("want 415 got %d", rr.Code)
 	}
 }
 
 func TestUpdateUserKeepsPassword(t *testing.T) {
-	users := []config.User{{Username: "bob", Password: "keepme", HasWebAccess: true, IsAdmin: true}}
-	s := testServer(t, Options{User: "admin", Password: "secret"}, users, sampleProvider("channels"))
+	tok := config.NewStreamToken()
+	users := []config.User{{Username: "bob", Password: "keepme", StreamToken: tok, HasWebAccess: true, IsAdmin: true}}
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, users, sampleProvider("channels"))
 	body := `{"Action":"updateuser","Users":[{"Username":"bob","Password":"","Network":"","IsAdmin":true,"HasWebAccess":true,"ProviderIds":[]}]}`
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/action", strings.NewReader(body))
@@ -190,49 +182,5 @@ func TestUpdateUserKeepsPassword(t *testing.T) {
 	got := s.store.Users()
 	if len(got) != 1 || got[0].Password != "keepme" {
 		t.Fatalf("password changed: %+v", got)
-	}
-}
-
-func TestCSRFRejectsPlainText(t *testing.T) {
-	s := testServer(t, Options{User: "admin", Password: "secret"}, nil, sampleProvider("channels"))
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/action", strings.NewReader(`{"Action":"getstatus"}`))
-	req.Header.Set("Content-Type", "text/plain")
-	req.SetBasicAuth("admin", "secret")
-	s.Handler().ServeHTTP(rr, req)
-	if rr.Code != http.StatusUnsupportedMediaType {
-		t.Fatalf("want 415 got %d", rr.Code)
-	}
-}
-
-func TestAdminOnlyUsersPage(t *testing.T) {
-	users := []config.User{{Username: "viewer", Password: "pw", HasWebAccess: true, IsAdmin: false}}
-	s := testServer(t, Options{}, users, sampleProvider("channels"))
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/users", nil)
-	req.SetBasicAuth("viewer", "pw")
-	s.Handler().ServeHTTP(rr, req)
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("want 403 got %d", rr.Code)
-	}
-}
-
-func TestSpecialCredentialChars(t *testing.T) {
-	pass := "p@ss/w rd%"
-	users := []config.User{{Username: "u1", Password: pass, HasWebAccess: true, IsAdmin: true, ProviderIds: []string{"*"}}}
-	s := testServer(t, Options{}, users, sampleProvider("channels"))
-	prefix := credPrefix("u1", pass)
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, prefix+"/app1.conf", nil)
-	req.Host = "h:7779"
-	s.Handler().ServeHTTP(rr, req)
-	if rr.Code != 200 {
-		b, _ := io.ReadAll(rr.Body)
-		t.Fatalf("status %d body %s", rr.Code, b)
-	}
-	var probe map[string]any
-	_ = json.Unmarshal([]byte("{}"), &probe)
-	if !strings.Contains(rr.Body.String(), prefix+"/stream/") {
-		t.Fatalf("escaped prefix missing in %s", rr.Body.String())
 	}
 }

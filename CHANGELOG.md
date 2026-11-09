@@ -8,19 +8,25 @@ Versions follow the release tags on GitHub.
 ## [Unreleased] — branch `devloper`
 
 ### Added
-- Phase 1 roadmap work: path-based stream credentials, role checks, provider scope, trusted proxies, CSRF guard on `/api/action`, SSRF block for private fetch targets, Docker `/app/data` volume, CI `gofmt` + `go test -race`.
+- Login page at `/login` with session cookies and logout.
+- Opaque playlist tokens `/t/<token>/...` (username/password never appear in stream URLs).
+- Login rate limiting per IP.
+- Rolling GitHub prerelease tag `dev` from every `devloper` push for VPS testing.
+- `internal/selector` quality grammar package (Phase 2 start).
+- Phase 1: role checks, provider scope, trusted proxies, CSRF on `/api/action`, SSRF private-fetch block, Docker `/app/data`, CI `gofmt` + `-race`.
 - This changelog.
 
 ### Changed
 - Panel static assets renamed from `o11.*` to `drmsonic.*`.
 - Users password field no longer stores the literal `hidden` placeholder.
-- Playlist and `app1.conf` links for users with passwords use `/{user}/{pass}/...` path credentials.
+- Playlist links use stream tokens instead of `/{user}/{pass}/`.
 
 ### Fixed
 - Auth ignored panel users unless `-user`/`-password` were set.
 - `?user=` alone could grant access without a password.
 - Empty-password users could authenticate.
 - Admin vs panel-user capabilities were not enforced.
+- Guessable username/password playlist paths removed.
 
 ## [1.1.3] — 2026-11-09
 
