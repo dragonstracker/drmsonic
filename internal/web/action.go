@@ -215,18 +215,22 @@ func (s *Server) acGetConf(w http.ResponseWriter, req actionRequest) {
 func (s *Server) acGetMonitoring(w http.ResponseWriter, req actionRequest) {
 	providers := s.store.Providers()
 	readers := make([]any, 0)
+	var totalIn float64
 	for _, p := range providers {
 		for i := range p.Streams {
 			st := &p.Streams[i]
 			if ch := s.mgr.Get(p.Id, st.Id); ch != nil && ch.Running {
+				totalIn += ch.BwIn
 				readers = append(readers, map[string]any{
 					"User":         "",
 					"Ip":           "",
 					"UserAgent":    "",
 					"StreamName":   fmt.Sprintf("%s/%s", p.Id, st.Id),
 					"ProviderName": p.Name,
-					"Bw":           0,
+					"Bw":           ch.BwIn,
 					"BwColor":      "white",
+					"Errors":       "",
+					"ErrorsColor":  "white",
 					"Uptime":       ch.StatusText(),
 					"Type":         "hls",
 				})
@@ -238,8 +242,8 @@ func (s *Server) acGetMonitoring(w http.ResponseWriter, req actionRequest) {
 		"Memory":       runtimeMemory(),
 		"CpuLoad":      0.0,
 		"CpuLoadColor": "green",
-		"TotalBwIn":    0,
-		"TotalBwOut":   0,
+		"TotalBwIn":    totalIn,
+		"TotalBwOut":   totalIn,
 		"Timezone":     "UTC",
 	})
 }
@@ -501,27 +505,82 @@ func (s *Server) acUpdateGlobal(w http.ResponseWriter, req actionRequest) {
 	if p == nil {
 		return
 	}
-	if v, ok := req.Raw["Bind"]; ok {
-		p.Bind = str(v)
+	stringsFields := []struct {
+		key string
+		dst *string
+	}{
+		{"Script", &p.Script},
+		{"Proxy", &p.Proxy},
+		{"Bind", &p.Bind},
+		{"Doh", &p.Doh},
+		{"NetworkScope", &p.NetworkScope},
+		{"UserAgent", &p.UserAgent},
+		{"RunningMode", &p.RunningMode},
+		{"OutputMode", &p.OutputMode},
+		{"EpgTimezone", &p.EpgTimezone},
+		{"VmxUniqueId", &p.VmxUniqueId},
+		{"PipeOutputCmdFormated", &p.PipeOutputCmdFormated},
 	}
-	if v, ok := req.Raw["Proxy"]; ok {
-		p.Proxy = str(v)
+	for _, f := range stringsFields {
+		if v, ok := req.Raw[f.key]; ok {
+			*f.dst = str(v)
+		}
 	}
-	if v, ok := req.Raw["Doh"]; ok {
-		p.Doh = str(v)
+
+	boolFields := []struct {
+		key string
+		dst *bool
+	}{
+		{"XForwardedFor", &p.XForwardedFor},
+		{"EventsAutorefresh", &p.EventsAutorefresh},
+		{"EventsAutoremove", &p.EventsAutoremove},
+		{"ChannelsAutoremove", &p.ChannelsAutoremove},
+		{"AlwaysResetSession", &p.AlwaysResetSession},
+		{"NoRestartOnError", &p.NoRestartOnError},
+		{"RestartFinished", &p.RestartFinished},
+		{"NoRestartOnTrackChange", &p.NoRestartOnTrackChange},
+		{"ReuseEventIndex", &p.ReuseEventIndex},
+		{"NoWaitFullPlaylist", &p.NoWaitFullPlaylist},
+		{"ContinuousPlayback", &p.ContinuousPlayback},
+		{"IgnoreStaticDash", &p.IgnoreStaticDash},
+		{"UseDashDelay", &p.UseDashDelay},
 	}
-	if v, ok := req.Raw["NetworkScope"]; ok {
-		p.NetworkScope = str(v)
+	for _, f := range boolFields {
+		if v, ok := req.Raw[f.key]; ok {
+			*f.dst = boolOf(v)
+		}
 	}
-	if v, ok := req.Raw["UserAgent"]; ok {
-		p.UserAgent = str(v)
+
+	intFields := []struct {
+		key string
+		dst *int
+	}{
+		{"MaxConcurrentStreams", &p.MaxConcurrentStreams},
+		{"RestartDelay", &p.RestartDelay},
+		{"NbAnnouncedFragments", &p.NbAnnouncedFragments},
+		{"HlsFragmentsDuration", &p.HlsFragmentsDuration},
+		{"AutorestartPeriod", &p.AutorestartPeriod},
+		{"PlaybackDelay", &p.PlaybackDelay},
+		{"RandomAutostartPeriod", &p.RandomAutostartPeriod},
+		{"SequencialAutostartPeriod", &p.SequencialAutostartPeriod},
+		{"SequentialAutostartPeriod", &p.SequencialAutostartPeriod},
+		{"EventsRefreshPeriod", &p.EventsRefreshPeriod},
+		{"HttpGetRetries", &p.HttpGetRetries},
+		{"StallDetectTimeout", &p.StallDetectTimeout},
 	}
-	if v, ok := req.Raw["RunningMode"]; ok {
-		p.RunningMode = str(v)
+	for _, f := range intFields {
+		if v, ok := req.Raw[f.key]; ok {
+			*f.dst = intOf(v)
+		}
 	}
-	if v, ok := req.Raw["OutputMode"]; ok {
-		p.OutputMode = str(v)
+
+	if v, ok := req.Raw["PlaylistDuration"]; ok {
+		p.PlaylistDuration = floatOf(v)
 	}
+	if v, ok := req.Raw["Headers"]; ok {
+		p.Headers = stringSlice(v)
+	}
+
 	if err := s.store.Put(p); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -537,12 +596,21 @@ func (s *Server) acMassUpdate(w http.ResponseWriter, req actionRequest) {
 		return
 	}
 	ids := requestedIDs(req)
-	field := str(mapGet(req.Raw, "Field"))
+	field := str(mapGet(req.Raw, "MassUpdateParam"))
+	if field == "" {
+		field = str(mapGet(req.Raw, "Field"))
+	}
 	value := mapGet(req.Raw, "Value")
-	set := req.Action == "massupdateset" || req.Action == "massupdate"
+	if v := mapGet(req.Raw, "MassUpdateValue"); v != nil {
+		value = v
+	}
+	set := !strings.EqualFold(str(value), "unset") || req.Action == "massupdateset"
+	if req.Action == "massupdateunset" {
+		set = false
+	}
 
 	for i := range p.Streams {
-		if !matchIDs(ids, p.Streams[i].Id) && !(len(ids) == 1 && ids[0] == "all") {
+		if !matchIDs(ids, p.Streams[i].Id) {
 			continue
 		}
 		if field == "" {
@@ -576,10 +644,10 @@ func (s *Server) acAddUser(w http.ResponseWriter, req actionRequest) {
 		}
 	}
 	users = append(users, config.User{
-		Username:  name,
-		Password:  str(mapGet(src, "Password")),
-		IsAdmin:   boolOf(mapGet(src, "IsAdmin")),
-		WebAccess: boolOf(mapGet(src, "WebAccess")),
+		Username:     name,
+		Password:     str(mapGet(src, "Password")),
+		IsAdmin:      boolOf(mapGet(src, "IsAdmin")),
+		HasWebAccess: boolOf(mapGet(src, "HasWebAccess")),
 	})
 	s.store.SetUsers(users)
 	if err := s.store.SaveUsers(); err != nil {
@@ -605,14 +673,14 @@ func (s *Server) acUpdateUser(w http.ResponseWriter, req actionRequest) {
 		if v, ok := src["IsAdmin"]; ok {
 			users[i].IsAdmin = boolOf(v)
 		}
-		if v, ok := src["WebAccess"]; ok {
-			users[i].WebAccess = boolOf(v)
+		if v, ok := src["HasWebAccess"]; ok {
+			users[i].HasWebAccess = boolOf(v)
 		}
-		if v, ok := src["Providers"]; ok {
-			users[i].Providers = stringSlice(v)
+		if v, ok := src["ProviderIds"]; ok {
+			users[i].ProviderIds = stringSlice(v)
 		}
-		if v, ok := src["Networks"]; ok {
-			users[i].Networks = stringSlice(v)
+		if v, ok := src["Network"]; ok {
+			users[i].Network = str(v)
 		}
 	}
 	if !found {
@@ -760,8 +828,11 @@ func requestedIDs(req actionRequest) []string {
 		}
 	}
 	if len(out) == 0 {
-		if v := mapGet(req.Raw, "Streams"); v != nil {
-			out = stringSlice(v)
+		for _, key := range []string{"MassUpdateStreamIds", "StreamIds", "Ids", "Streams"} {
+			if v := mapGet(req.Raw, key); v != nil {
+				out = append(out, stringSlice(v)...)
+				break
+			}
 		}
 	}
 	return out
@@ -960,6 +1031,12 @@ func applyStreamPayload(st *config.Stream, m map[string]any) {
 	if v, ok := m["NetworkScope"]; ok {
 		st.NetworkScope = str(v)
 	}
+	if v, ok := m["RangeStartTime"]; ok {
+		st.RangeStartTime = str(v)
+	}
+	if v, ok := m["RangeEndTime"]; ok {
+		st.RangeEndTime = str(v)
+	}
 	if v, ok := m["Start"]; ok {
 		st.RangeStartTime = str(v)
 	}
@@ -997,34 +1074,77 @@ func applyStreamPayload(st *config.Stream, m map[string]any) {
 }
 
 func applyDynamicField(st *config.Stream, field string, set bool, value any) {
-	switch field {
-	case "Autostart", "autostart":
+	switch strings.ToLower(field) {
+	case "autostart":
 		st.Autostart = set
-	case "OnDemand", "ondemand":
+	case "ondemand":
 		st.OnDemand = set
-	case "SpeedUp", "speedup":
+	case "sessionmanifest":
+		st.SessionManifest = set
+	case "speedup":
 		st.SpeedUp = set
-	case "RecordEvent", "recordevent":
-		st.RecordEvent = set
-	case "NetworkOverride", "network":
-		st.NetworkOverride = set
-	case "IgnoreUpdate", "ignoreupdate":
-		st.IgnoreUpdate = set
-	case "FixIvSize", "fixivsize":
-		st.FixIvSize = set
-	case "TimeRange", "timerange":
-		st.TimeRange = set
-	case "UseCdm", "usecdm":
+	case "usecdm":
 		st.UseCdm = set
-	case "RunningMode":
+	case "recordevent":
+		st.RecordEvent = set
+	case "networkoverride", "network":
+		st.NetworkOverride = set
+	case "modeoverride":
+		st.ModeOverride = set
+	case "ignoreupdate":
+		st.IgnoreUpdate = set
+	case "fixivsize":
+		st.FixIvSize = set
+	case "timerange":
+		st.TimeRange = set
+	case "clearmanifest":
+		if set {
+			st.Manifest = ""
+		}
+	case "clearmanifestscript":
+		if set {
+			st.ManifestScript = ""
+		}
+	case "clearcdm":
+		if set {
+			st.Cdm = ""
+			st.UseCdm = false
+		}
+	case "clearoldkeys":
+		if set {
+			st.Keys = nil
+		}
+	case "setwidevine":
+		st.CdmType = config.CdmWidevine
+	case "setplayready":
+		st.CdmType = config.CdmPlayReady
+	case "setverimatrix":
+		st.CdmType = config.CdmVerimatrix
+	case "setcdminternal":
+		st.CdmMode = config.CdmInternal
+	case "setcdmexternal":
+		st.CdmMode = config.CdmExternal
+	case "selectbestvideo":
+		if set {
+			st.Video = "best"
+		} else {
+			st.Video = ""
+		}
+	case "selectallaudios":
+		if set {
+			st.Audio = "all"
+		} else {
+			st.Audio = ""
+		}
+	case "runningmode":
 		if set {
 			st.RunningMode = str(value)
 		}
-	case "OutputMode":
+	case "outputmode":
 		if set {
 			st.OutputMode = str(value)
 		}
-	case "Mode":
+	case "mode":
 		if set {
 			st.Mode = str(value)
 		}
@@ -1086,6 +1206,47 @@ func boolOf(v any) bool {
 		return t != 0
 	default:
 		return false
+	}
+}
+
+func intOf(v any) int {
+	switch t := v.(type) {
+	case nil:
+		return 0
+	case json.Number:
+		n, _ := t.Int64()
+		return int(n)
+	case float64:
+		return int(t)
+	case string:
+		n, _ := strconv.Atoi(strings.TrimSpace(t))
+		return n
+	case bool:
+		if t {
+			return 1
+		}
+		return 0
+	default:
+		return 0
+	}
+}
+
+func floatOf(v any) float64 {
+	switch t := v.(type) {
+	case nil:
+		return 0
+	case json.Number:
+		f, _ := t.Float64()
+		return f
+	case float64:
+		return t
+	case int:
+		return float64(t)
+	case string:
+		f, _ := strconv.ParseFloat(strings.TrimSpace(t), 64)
+		return f
+	default:
+		return 0
 	}
 }
 

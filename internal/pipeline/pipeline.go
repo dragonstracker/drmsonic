@@ -20,6 +20,7 @@ type TrackInfo struct {
 	Height    int
 	Bandwidth int
 	Lang      string
+	Kid       string
 }
 
 type Callbacks struct {

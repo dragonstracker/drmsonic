@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 const (
 	VersionName = "drmsonic"
 	VersionTag  = "v1.0.0"
@@ -242,12 +244,22 @@ func (p *Provider) EffectiveOutputMode() string {
 }
 
 type User struct {
-	Username  string   `json:"Username"`
-	Password  string   `json:"Password"`
-	Providers []string `json:"Providers"`
-	Networks  []string `json:"Networks"`
-	IsAdmin   bool     `json:"IsAdmin"`
-	WebAccess bool     `json:"WebAccess"`
+	Username     string   `json:"Username"`
+	Password     string   `json:"Password"`
+	ProviderIds  []string `json:"ProviderIds"`
+	Network      string   `json:"Network"`
+	IsAdmin      bool     `json:"IsAdmin"`
+	HasWebAccess bool     `json:"HasWebAccess"`
+}
+
+func (u User) NetworkList() []string {
+	out := make([]string, 0, 4)
+	for _, part := range strings.Split(u.Network, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 type Config struct {
@@ -256,13 +268,11 @@ type Config struct {
 
 type Recording struct {
 	Id           int    `json:"Id"`
-	Title        string `json:"Title"`
-	Provider     string `json:"Provider"`
-	Channel      string `json:"Channel"`
+	ProviderName string `json:"ProviderName"`
+	StreamName   string `json:"StreamName"`
+	StreamId     string `json:"StreamId"`
 	Start        string `json:"Start"`
 	End          string `json:"End"`
-	StartFmt     string `json:"StartFmt"`
-	EndFmt       string `json:"EndFmt"`
 	Status       string `json:"Status"`
 	StreamingUrl string `json:"StreamingUrl"`
 }

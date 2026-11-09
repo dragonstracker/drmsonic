@@ -1,0 +1,32 @@
+<html>
+	<body>
+		<table style="clear:both;" id="epgtable" class="table table-dark table-bordered" border="1" >
+			<thead>
+				<TR style='text-align:center; vertical-align:middle;'>
+					<TH>Title of Event</TH>
+					<TH>Start Date ({{.Timezone}})</TH>
+					<TH>End Data ({{.Timezone}})</TH>
+					<TH>Event Id</TH>
+				</TR>
+			</thead>
+			<tbody>
+				{{range $n, $e := .Entries}}
+				<TR>
+					<TD style='text-align:center; vertical-align:middle; width:500px'>
+						<a style="width:250px;text-align:center; vertical-align:middle" ><a style="color: {{$e.TitleColor}}";>{{$e.Title}}</a>
+					</TD>
+					<TD style='text-align:center; vertical-align:middle; width:250px'>
+						<a style="width:250px;text-align:center; vertical-align:middle" >{{$e.Start}}</a>
+					</TD>
+					<TD style='text-align:center; vertical-align:middle; width:250px'>
+						<a style="width:250px;text-align:center; vertical-align:middle" >{{$e.End}}</a>
+					</TD>
+					<TD style='text-align:center; vertical-align:middle; width:250px'>
+						<a style="width:250px;text-align:center; vertical-align:middle" >{{$e.EventId}}</a>
+					</TD>
+				</TR>
+				{{end}}
+			</tbody>
+		</table>
+	</body>
+</html>

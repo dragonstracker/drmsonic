@@ -239,13 +239,14 @@ func (s *Server) applyTracks(prov *config.Provider, st *config.Stream, video, au
 				Width:     t.Width,
 				Height:    t.Height,
 				Bandwidth: t.Bandwidth,
+				Kid:       t.Kid,
 			})
 		}
 		if !sameTracks(st.VideoList, list) {
 			st.VideoList = list
 			changed = true
 		}
-		if st.Video == "" || st.Video == "all" {
+		if st.Video == "" {
 			if best := bestTrack(list); best != "" {
 				st.Video = best
 				changed = true
@@ -261,13 +262,14 @@ func (s *Server) applyTracks(prov *config.Provider, st *config.Stream, video, au
 				Codecs:    t.Codecs,
 				Bandwidth: t.Bandwidth,
 				Language:  t.Lang,
+				Kid:       t.Kid,
 			})
 		}
 		if !sameTracks(st.AudioList, list) {
 			st.AudioList = list
 			changed = true
 		}
-		if st.Audio == "" || st.Audio == "all" {
+		if st.Audio == "" {
 			if best := bestTrack(list); best != "" {
 				st.Audio = best
 				changed = true
@@ -282,7 +284,7 @@ func sameTracks(a, b []config.Track) bool {
 		return false
 	}
 	for i := range a {
-		if a[i].Id != b[i].Id || a[i].Codecs != b[i].Codecs || a[i].Desc != b[i].Desc {
+		if a[i].Id != b[i].Id || a[i].Codecs != b[i].Codecs || a[i].Desc != b[i].Desc || a[i].Kid != b[i].Kid {
 			return false
 		}
 	}

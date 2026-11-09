@@ -1,462 +1,596 @@
-﻿<!DOCTYPE html>
 <html>
 	{{template "headers.html" .}}
 	<body>
 		{{template "menu.html" .}}
-
-		<div style="margin-top: -120px; margin-left: 20px; margin-right: 20px;">
-
-			<div class="input-group mb-3" style="width: 520px;">
-				<span class="input-group-text">PROVIDER</span>
-				<select class="form-select" id="providerSelection">
-					{{range .Providers}}
-					<option value="{{ .Id }}" {{selected .Id $.ProviderId}}>{{ .Name }}</option>
-					{{end}}
-				</select>
-				<input type="text" class="form-control" id="addProviderText" placeholder="new provider name"/>
-				<button class="btn btn-primary" id="addProviderButton" onclick="addProviderFormSubmit(event)">ADD</button>
-				<button class="btn btn-danger" id="deleteProviderButton" onclick="deleteProviderClick(event)">DEL</button>
-				<button class="btn btn-secondary" id="exportProviderButton" onclick="exportProviderClick(event)">EXPORT</button>
-				<button class="btn btn-secondary" id="importProviderButton" onclick="importProviderClick(event)">IMPORT</button>
-			</div>
-
-			<div class="card mb-3">
-				<div class="card-header">Global settings</div>
-				<div class="card-body">
-					<div class="row g-2">
-						<div class="col-md-3">
-							<label class="form-label">Running mode</label>
-							<select class="form-select" id="runningmode">
-								{{range .RunningModes}}<option value="{{ . }}">{{ . }}</option>{{end}}
-							</select>
-						</div>
-						<div class="col-md-3" id="outputmodediv">
-							<label class="form-label">Output mode</label>
-							<select class="form-select" id="outputmode">
-								{{range .OutputModes}}<option value="{{ . }}">{{ . }}</option>{{end}}
-							</select>
-						</div>
-						<div class="col-md-3">
-							<label class="form-label">User-Agent</label>
-							<input type="text" class="form-control" id="useragent"/>
-						</div>
-						<div class="col-md-3">
-							<label class="form-label">Script</label>
-							<input type="text" class="form-control" id="script"/>
-						</div>
-						<div class="col-md-3">
-							<label class="form-label">VMX unique id</label>
-							<input type="text" class="form-control" id="vmxuniqueid"/>
-						</div>
-						<div class="col-md-3">
-							<label class="form-label">Bind</label>
-							<input type="text" class="form-control" id="bind"/>
-						</div>
-						<div class="col-md-3">
-							<label class="form-label">Proxy</label>
-							<input type="text" class="form-control" id="proxy"/>
-						</div>
-						<div class="col-md-3">
-							<label class="form-label">DoH</label>
-							<input type="text" class="form-control" id="doh"/>
-						</div>
-						<div class="col-md-3">
-							<label class="form-label">Network scope</label>
-							<input type="text" class="form-control" id="networkscope"/>
-						</div>
-						<div class="col-md-9">
-							<label class="form-label">Headers (one per line)</label>
-							<textarea class="form-control" rows="3" id="headers"></textarea>
-						</div>
-						<div class="col-md-12">
-							<div class="form-check form-switch">
-								<input class="form-check-input" type="checkbox" id="xforwardedfor"/>
-								<label class="form-check-label" for="xforwardedfor">X-Forwarded-For passthrough</label>
+		<div style="width: 100%; overflow:hidden; margin-top: -100px">
+			<div style="float: left; margin-left: 20px;">
+				<div style="display: flex; z-index:1; position:relative">
+					<input type="submit" class="btn btn-primary btn-sm" value="SAVE ALL PROVIDERS" id="saveall"/>
+					&nbsp;
+					<input type="submit" class="btn btn-primary btn-sm" value="RESCAN PROVIDERS" id="rescanproviders"/>
+					&nbsp;
+					<input type="submit" class="btn btn-primary btn-sm" value="SHUTDOWN" id="shutdown"/>
+				</div>
+				<br>
+				<div style="display: flex; z-index:1; position:relative">
+					<form id="addProviderForm">
+						<div class="input-group mb-3">
+							<div class="input-group-prepend">
+								<input style='width: 135px;' type="submit" class="btn btn-outline-primary btn-sm" id="addprovider" value="NEW PROVIDER" />
 							</div>
-							<div class="form-check form-switch">
-								<input class="form-check-input" type="checkbox" id="alwaysresetsession"/>
-								<label class="form-check-label" for="alwaysresetsession">Always reset session</label>
-							</div>
+							<input style='width: 200px;' class="form control" placeholder="provider name" id="addProviderText" type="text" value="" />
 						</div>
+					</form>
+					&nbsp;
+					<form>
+						<input type="submit" class="btn btn-primary btn-sm" value="IMPORT" id="importprovider"/>
+					</form>
+				</div>
+
+				<div style="display: flex;">
+					{{ if .Providers}}
+					<div style='width: 500px;' class="input-group mb-3">
+						<select style='text-align:center; vertical-align:middle; font-weight: bold; width: 335px; height: 30px' id="providerSelection" >
+							{{range $n, $g := .Providers}}
+							<option value="{{$g.Id}}">{{$g.Name}}</option>
+							{{end}}
+						</select>
+						{{ if .ProviderId}}
+						&nbsp;
+						<input style='height: 30px' type="submit" class="btn btn-primary btn-sm" value="RENAME" id="renameprovider"/>
+						&nbsp;
+						<input style='height: 30px' type="submit" class="btn btn-primary btn-sm" value="DELETE" id="deleteprovider"/>
+						{{ end }}
 					</div>
-					<button class="btn btn-primary mt-3" id="applyglobalnetwork" onclick="applyGlobalNetworkClick(event)">APPLY NETWORK</button>
+					{{ end }}
 				</div>
-			</div>
-
-			<div class="card mb-3">
-				<div class="card-header">Behaviour</div>
-				<div class="card-body">
-					<div class="row g-2">
-						<div class="col-md-2"><label class="form-label">Autorestart period</label><input type="number" class="form-control" id="autorestartperiod"/></div>
-						<div class="col-md-2"><label class="form-label">Random autostart</label><input type="number" class="form-control" id="randomautostartperiod"/></div>
-						<div class="col-md-2"><label class="form-label">Sequencial autostart</label><input type="number" class="form-control" id="sequencialautostartperdiod"/></div>
-						<div class="col-md-2"><label class="form-label">Restart delay</label><input type="number" class="form-control" id="restartdelay"/></div>
-						<div class="col-md-2"><label class="form-label">Playlist duration</label><input type="number" class="form-control" id="playlistduraion"/></div>
-						<div class="col-md-2"><label class="form-label">HLS fragments duration</label><input type="number" class="form-control" id="hlsfragmentsduration"/></div>
-						<div class="col-md-2"><label class="form-label">Nb announced fragments</label><input type="number" class="form-control" id="nbannouncedfragments"/></div>
-						<div class="col-md-2"><label class="form-label">Playback delay</label><input type="number" class="form-control" id="playbackdelay"/></div>
-						<div class="col-md-2"><label class="form-label">HTTP get retries</label><input type="number" class="form-control" id="httpgetretries"/></div>
-						<div class="col-md-2"><label class="form-label">Stall detect timeout</label><input type="number" class="form-control" id="stalldetecttimeout"/></div>
-						<div class="col-md-2"><label class="form-label">Max concurrent streams</label><input type="number" class="form-control" id="maxconcurrentstreams"/></div>
-						<div class="col-md-2"><label class="form-label">EPG timezone</label><input type="text" class="form-control" id="epgtimezone"/></div>
-						<div class="col-md-4"><label class="form-label">Pipe output command</label><input type="text" class="form-control" id="pipeoutputcmdformated"/></div>
-						<div class="col-md-4"><label class="form-label">Events refresh period</label><input type="number" class="form-control" id="eventsrefreshperiod"/></div>
-						<div class="col-md-4">
-							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="restartfinished"/><label class="form-check-label" for="restartfinished">Restart finished</label></div>
-							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="continuousplayback"/><label class="form-check-label" for="continuousplayback">Continuous playback</label></div>
-							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="nowaitfullplaylist"/><label class="form-check-label" for="nowaitfullplaylist">No wait full playlist</label></div>
-							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="ignorestaticdash"/><label class="form-check-label" for="ignorestaticdash">Ignore static DASH</label></div>
-							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="usedashdelay"/><label class="form-check-label" for="usedashdelay">Use DASH delay</label></div>
-							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="norestartonerror"/><label class="form-check-label" for="norestartonerror">No restart on error</label></div>
-							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="norestartontrackchange"/><label class="form-check-label" for="norestartontrackchange">No restart on track change</label></div>
-							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="eventsautorefresh"/><label class="form-check-label" for="eventsautorefresh">Events autorefresh</label></div>
-							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="eventsautoremove"/><label class="form-check-label" for="eventsautoremove">Events autoremove</label></div>
-							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="channelsautoremove"/><label class="form-check-label" for="channelsautoremove">Channels autoremove</label></div>
-							<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="reuseeventindex"/><label class="form-check-label" for="reuseeventindex">Reuse event index</label></div>
-						</div>
-					</div>
-				</div>
-			</div>
-
-			<div class="input-group mb-3" style="width: 520px;">
-				<span class="input-group-text">NEW STREAM</span>
-				<input type="text" class="form-control" id="addText" placeholder="stream name"/>
-				<button class="btn btn-primary" id="addStreamButton" onclick="addStreamFormSubmit(event)">ADD</button>
-			</div>
-
-			<div class="input-group mb-3" style="width: 720px;">
-				<span class="input-group-text">MASS UPDATE</span>
-				<select class="form-select" id="massupdateselection">
-					<option value="all">All</option>
-					<option value="selected">Selected</option>
-					<option value="visible">Visible</option>
-					<option value="page">Page</option>
-				</select>
-				<select class="form-select" id="massupdateparams">
-					<option value="Autostart">Autostart</option>
-					<option value="OnDemand">OnDemand</option>
-					<option value="SpeedUp">SpeedUp</option>
-					<option value="RecordEvent">RecordEvent</option>
-					<option value="NetworkOverride">NetworkOverride</option>
-					<option value="IgnoreUpdate">IgnoreUpdate</option>
-					<option value="FixIvSize">FixIvSize</option>
-					<option value="TimeRange">TimeRange</option>
-					<option value="UseCdm">UseCdm</option>
-				</select>
-				<button class="btn btn-primary" id="massUpdateSet" onclick="massupdateClick(event)">SET</button>
-				<button class="btn btn-secondary" id="massUpdateUnset" onclick="massupdateClick(event)">UNSET</button>
-				<div class="form-check form-switch ms-3 mt-2"><input class="form-check-input" type="checkbox" id="checkall" onchange="checkallChange(event)"/><label class="form-check-label" for="checkall">All</label></div>
-			</div>
-
-			{{range .Streams}}
-			{{ $n := printf "_%s_%s" $.ProviderId .Id }}
-			{{ $st := . }}
-			<div class="card mb-3" style="border-width: 3px;">
-				<div class="card-header" style="display:flex; align-items:center;">
-					<input class="form-check-input me-2" type="checkbox" id="checked{{ $n }}"/>
-					<img id="qualitylogo{{ $n }}" width="20" class="me-2"/>
-					<a id="name{{ $n }}" class="btn btn-outline-primary me-2">{{ .Name }}</a>
-					<button class="btn btn-primary btn-sm me-1" id="startStop{{ $n }}">START</button>
-					<button class="btn btn-secondary btn-sm me-1" id="refresh{{ $n }}">REFRESH</button>
-					<button class="btn btn-secondary btn-sm me-1" id="refreshkeys{{ $n }}">REFRESH KEYS</button>
-					<button class="btn btn-danger btn-sm" id="flushkeys{{ $n }}">FLUSH KEYS</button>
-					<div hidden id="statusfull{{ $n }}"></div>
-					<pre class="ms-auto mb-0" style="white-space: pre-wrap;" id="status{{ $n }}"></pre>
-					<pre class="ms-2 mb-0" style="white-space: pre-wrap;" id="streamerrors{{ $n }}"></pre>
-				</div>
-				<div class="card-body">
-					<div class="row g-2">
-						<div class="col-md-8">
-							<label class="form-label">Manifest URL</label>
-							<input type="text" class="form-control" id="manifestUrl{{ $n }}" value="{{ .Manifest }}"/>
-						</div>
-						<div class="col-md-2">
-							<label class="form-label">Mode</label>
-							<select class="form-select" id="mode{{ $n }}">
-								{{range $.ModeNames}}<option value="{{ . }}" {{selected . $st.Mode}}>{{ . }}</option>{{end}}
-							</select>
-						</div>
-						<div class="col-md-2">
-							<label class="form-label">Manifest script</label>
-							<input type="text" class="form-control" id="manifestscript{{ $n }}" value="{{ .ManifestScript }}"/>
-						</div>
-
-						<div class="col-md-3" id="vStreamIdDiv{{ $n }}">
-							<label class="form-label">Video</label>
-							<select class="form-select" id="vStreamId{{ $n }}">
-								<option value="all">all</option>
-								{{range .VideoList}}<option value="{{ .Id }}" {{selected .Id $st.Video}}>{{ .Desc }}</option>{{end}}
-							</select>
-						</div>
-						<div class="col-md-3" id="aStreamIdDiv{{ $n }}">
-							<label class="form-label">Audio</label>
-							<select class="form-select" id="aStreamId{{ $n }}" multiple>
-								<option value="all">all</option>
-								<option value="none">none</option>
-								{{range .AudioList}}<option value="{{ .Id }}" {{selected .Id $st.Audio}}>{{ .Desc }}</option>{{end}}
-							</select>
-						</div>
-						<div class="col-md-3" id="sStreamIdDiv{{ $n }}">
-							<label class="form-label">Subtitles</label>
-							<select class="form-select" id="sStreamId{{ $n }}" multiple>
-								<option value="all">all</option>
-								{{range .SubtitlesList}}<option value="{{ .Id }}" {{selected .Id $st.Subtitles}}>{{ .Desc }}</option>{{end}}
-							</select>
-						</div>
-						<div class="col-md-3">
-							<label class="form-label">Keys (kid:key per line)</label>
-							<textarea class="form-control" rows="2" id="keys{{ $n }}">{{ keysText .Keys }}</textarea>
-						</div>
-
-						<div class="col-md-2">
-							<label class="form-label">Running mode</label>
-							<select class="form-select" id="runningmode{{ $n }}">
-								{{range $.RunningModes}}<option value="{{ . }}" {{selected . $st.RunningMode}}>{{ . }}</option>{{end}}
-							</select>
-						</div>
-						<div class="col-md-2">
-							<label class="form-label">Output mode</label>
-							<select class="form-select" id="outputmode{{ $n }}">
-								{{range $.OutputModes}}<option value="{{ . }}" {{selected . $st.OutputMode}}>{{ . }}</option>{{end}}
-							</select>
-						</div>
-						<div class="col-md-2">
-							<label class="form-label">CDM type</label>
-							<select class="form-select" id="cdmtype{{ $n }}">
-								{{range $.CdmTypes}}<option value="{{ . }}" {{selected . $st.CdmType}}>{{ . }}</option>{{end}}
-							</select>
-						</div>
-						<div class="col-md-2">
-							<label class="form-label">CDM mode</label>
-							<select class="form-select" id="cdmmode{{ $n }}">
-								<option value="internal" {{selected "internal" .CdmMode}}>internal</option>
-								<option value="external" {{selected "external" .CdmMode}}>external</option>
-							</select>
-						</div>
-						<div class="col-md-4" id="cdmdiv{{ $n }}">
-							<label class="form-label">CDM</label>
-							<input type="text" class="form-control" id="cdm{{ $n }}" value="{{ .Cdm }}"/>
-						</div>
-
-						<div class="col-md-3"><label class="form-label">PlayReady LA version</label><input type="text" class="form-control" id="prlaversion{{ $n }}" value="{{ .PRLAVersion }}"/></div>
-						<div class="col-md-3"><label class="form-label">PlayReady client version</label><input type="text" class="form-control" id="prclientversion{{ $n }}" value="{{ .PRClientVersion }}"/></div>
-						<div class="col-md-3"><label class="form-label">PlayReady custom data</label><input type="text" class="form-control" id="prcustomdata{{ $n }}" value="{{ .PRCustomData }}"/></div>
-						<div class="col-md-3"><label class="form-label">Pipe output params</label><input type="text" class="form-control" id="pipeoutputparams{{ $n }}" value="{{ .PipeOutputParams }}"/></div>
-						<div class="col-md-3"><label class="form-label">Proto output params</label><input type="text" class="form-control" id="protooutputparams{{ $n }}" value="{{ .ProtoOutputParams }}"/></div>
-
-						<div class="col-md-2"><label class="form-label">Bind</label><input type="text" class="form-control" id="bind{{ $n }}" value="{{ .Bind }}"/></div>
-						<div class="col-md-2"><label class="form-label">Proxy</label><input type="text" class="form-control" id="proxy{{ $n }}" value="{{ .Proxy }}"/></div>
-						<div class="col-md-2"><label class="form-label">DoH</label><input type="text" class="form-control" id="doh{{ $n }}" value="{{ .Doh }}"/></div>
-						<div class="col-md-3"><label class="form-label">Network scope</label><input type="text" class="form-control" id="networkscope{{ $n }}" value="{{ .NetworkScope }}"/></div>
-						<div class="col-md-3">
-							<label class="form-label">Headers</label>
-							<button class="btn btn-secondary btn-sm w-100" id="showheaders{{ $n }}" onclick="showHideHeaders(event)">SHOW</button>
-						</div>
-						<div class="col-md-6" id="headersDiv{{ $n }}" style="display:none;">
-							<label class="form-label">Manifest headers</label>
-							<textarea class="form-control" rows="2" id="headersmanifest{{ $n }}"></textarea>
-							<label class="form-label mt-2">Media headers</label>
-							<textarea class="form-control" rows="2" id="headersmedia{{ $n }}"></textarea>
-						</div>
-
-						<div class="col-md-3"><label class="form-label">Range start date</label><input type="date" class="form-control" id="rangeStartDate{{ $n }}"/></div>
-						<div class="col-md-3"><label class="form-label">Range start time</label><input type="time" class="form-control" id="rangeStartTime{{ $n }}" value="{{ default "00:00" .RangeStartTime }}"/></div>
-						<div class="col-md-3"><label class="form-label">Range end date</label><input type="date" class="form-control" id="rangeEndDate{{ $n }}"/></div>
-						<div class="col-md-3"><label class="form-label">Range end time</label><input type="time" class="form-control" id="rangeEndTime{{ $n }}" value="{{ default "00:00" .RangeEndTime }}"/></div>
-
-						<div class="col-md-12">
-							<div class="row g-2 mt-2">
-								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="autostart{{ $n }}" {{checked .Autostart}}/><label class="form-check-label">Autostart</label></div></div>
-								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="ondemand{{ $n }}" {{checked .OnDemand}}/><label class="form-check-label">OnDemand</label></div></div>
-								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="speedup{{ $n }}" {{checked .SpeedUp}}/><label class="form-check-label">SpeedUp</label></div></div>
-								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="usecdm{{ $n }}" {{checked .UseCdm}}/><label class="form-check-label">Use CDM</label></div></div>
-								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="network{{ $n }}" {{checked .NetworkOverride}}/><label class="form-check-label">Network override</label></div></div>
-								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="modeoverride{{ $n }}" {{checked .ModeOverride}}/><label class="form-check-label">Mode override</label></div></div>
-								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="recordevent{{ $n }}" {{checked .RecordEvent}}/><label class="form-check-label">Record event</label></div></div>
-								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="ignoreupdate{{ $n }}" {{checked .IgnoreUpdate}}/><label class="form-check-label">Ignore update</label></div></div>
-								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="fixivsize{{ $n }}" {{checked .FixIvSize}}/><label class="form-check-label">Fix IV size</label></div></div>
-								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="timerange{{ $n }}" {{checked .TimeRange}}/><label class="form-check-label">Time range</label></div></div>
-								<div class="col-md-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="sessionmanifest{{ $n }}" {{checked .SessionManifest}}/><label class="form-check-label">Session manifest</label></div></div>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-			{{end}}
-
-			<div class="mb-5">
-				<button class="btn btn-success btn-lg" id="saveall" onclick="saveClick(event)">SAVE ALL</button>
-				<button class="btn btn-primary btn-lg" id="saveprovider" onclick="saveClick(event)">SAVE PROVIDER</button>
 			</div>
 		</div>
 
+		{{ if .ProviderId }}
+
+		<hr>
+		<br>
+		<br>
+
+		<div style="width: 100%; overflow:hidden;">
+			<div style="float: left; margin-left: 20px;">
+				<div style="width: 100%; overflow:hidden;">
+					<div style="float: left; margin-right:100px; border:1px white;">
+						<div style="display: flex;">
+							<div style='width: 350px;' class="input-group mb-3">
+								<span style='width: 120px;' class="input-group-text">Running Mode</span>
+								<select style='text-align:center; vertical-align:middle; font-weight: bold' id="runningmode" class="form-select">
+									<option value="internalremuxer">Internal remuxer</option>
+									{{ if not .InternalUdpOnly }}
+									<option value="residentffmpeg">FFmpeg resident</option>
+									<option value="ffmpeg">FFmpeg TS HLS/Direct</option>
+									<option value="ffmpegmulti">FFmpeg MultiTS HLS</option>
+									<option value="fmp4hls">FMP4 HLS</option>
+									{{ end }}
+								</select>
+							</div>
+							<div>&nbsp;</div>
+							<div style='width: 350px; display: none' class="input-group mb-3" id='outputmodediv'>
+								<span style='width: 120px;' class="input-group-text">Output Mode</span>
+								<select style='text-align:center; vertical-align:middle; font-weight: bold' id="outputmode" class="form-select">
+									{{ if not .InternalUdpOnly }}
+									<option value="directhls">HLS/Direct</option>
+									<option value="srtserver">SRT Server</option>
+									{{ end }}
+									<option value="protooutput">UDP/SRT</option>
+									<option value="custom">Custom</option>
+								</select>
+							</div>
+						</div>
+						<br>
+						<div style="display: flex;">
+							<div id="scriptDiv" style='width: 350px; height: 15px;' class="input-group mb-3">
+								<span style='width: 120px;' class="input-group-text">Script</span>
+								<input class="form-control" placeholder="script param1 param2..." id="script" type="text"/>
+							</div>
+							<div>&nbsp;&nbsp;&nbsp;&nbsp;</div>
+							<form id="channelsUpdateForm">
+								<div class="input-group-prepend">
+									<input style='width: 135px;' type="submit" class="btn btn-primary btn-sm" id="channelsrefresh" value="UPDATE CHANNELS"/>
+								</div>
+								<br>
+								<div style="display: flex;">
+									<div class="form-check">
+										<input class="form-check-input" type="checkbox" id="channelsautoremove" />
+										<label class="form-check-label" for="channelsAutoremove">auto remove</label>
+									</div>
+								</div>
+							</form>
+							<div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+							<form id="eventsRefreshForm">
+								<div class="input-group-prepend">
+									<input style='width: 135px;' type="submit" class="btn btn-primary btn-sm" id="eventsrefresh" value="REFRESH EVENTS"/>
+								</div>
+								<br>
+								<div style="display: flex;">
+									<div class="form-check">
+										<input class="form-check-input" type="checkbox" id="eventsautorefresh" />
+										<label class="form-check-label" for="eventsAutorefresh">auto refresh</label>
+									</div>
+									<div>&nbsp;&nbsp;</div>
+									<div class="form-check">
+										<input class="form-check-input" type="checkbox" id="eventsautoremove" />
+										<label class="form-check-label" for="eventsAutoremove">auto remove</label>
+									</div>
+								</div>
+							</form>
+							<div id="channelsloading" style="margin-left: 20px; margin-top: -2px;"></div>
+							<div id="eventsloading" style="margin-left: 20px; margin-top: -2px;"></div>
+						</div>
+						<input id="networkparamsbutton" style='width: 350px;' type="submit" value="&#9661;  NETWORK PARAMETERS  &#9661;" class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#networkparams" aria-expanded="false" aria-controls="networkparams"/>
+						<input id="additionalparamsbutton" style='width: 350px;' type="submit" value="&#9661;  ADDITIONAL PARAMETERS  &#9661;" class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#additionalparams" aria-expanded="false" aria-controls="additionalparams"/>
+						<div id="additionalparams" class="collapse">
+							<br>
+							<div style="display: flex;">
+								<div>
+									<div class="form-check" title="Always reset manifest url at startup in SessionManifest mode">
+										<input class="form-check-input" type="checkbox" id="alwaysresetsession" />
+										<label class="form-check-label" for="alwaysresetsession">Always reset session</label>
+									</div>
+									<div class="form-check" title="Don't automatically restart a stream when it returns an error">
+										<input class="form-check-input" type="checkbox" id="norestartonerror" />
+										<label class="form-check-label" for="norestartonerror">No restart on error</label>
+									</div>
+									<div class="form-check" title="Automatically restart a stream when broadcasting is finished">
+										<input class="form-check-input" type="checkbox" id="restartfinished" />
+										<label class="form-check-label" for="restartfinished">Restart finished broadcast</label>
+									</div>
+									<div class="form-check" title="Don't restart stream if a change in tracks is detected">
+										<input class="form-check-input" type="checkbox" id="norestartontrackchange" />
+										<label class="form-check-label" for="norestartontrackchange">No restart on track change</label>
+									</div>
+									<div class="form-check" title="Reuse free event index for event ID, instead for an always growing incremental number">
+										<input class="form-check-input" type="checkbox" id="reuseeventindex" />
+										<label class="form-check-label" for="reuseeventindex">Reuse event index</label>
+									</div>
+									<div class="form-check" title="Don't wait for a full playlist to allow streaming">
+										<input class="form-check-input" type="checkbox" id="nowaitfullplaylist" />
+										<label class="form-check-label" for="nowaitfullplaylist">Don't wait for full playlist</label>
+									</div>
+									<div class="form-check" title="Continuous playback, don't reset output playlist on restart (only in FFmpeg running mode)">
+										<input class="form-check-input" type="checkbox" id="continuousplayback" />
+										<label class="form-check-label" for="continuousplayback">Continuous playback</label>
+									</div>
+									<div class="form-check" title="Ignore static type from dash manifest, always assume it's live">
+										<input class="form-check-input" type="checkbox" id="ignorestaticdash" />
+										<label class="form-check-label" for="ignorestaticdash">Ignore dash static flag</label>
+									</div>
+									<div class="form-check" title="Use SuggestedPresentationDelay from DASH manifest to delay playback by skipping fragments. This is required for some providers and this is overriden by PlaybackDelay value">
+										<input class="form-check-input" type="checkbox" id="usedashdelay" />
+										<label class="form-check-label" for="ignorestaticdash">Use DASH delay</label>
+									</div>
+								</div>
+								<div>&nbsp;&nbsp;&nbsp;&nbsp;</div>
+								<div>
+									<br>
+									<div id="userAgentForm" style='width: 250px;' class="input-group mb-3" title="User Agent to use for HTTP connections.">
+										<span style='width: 120px;' class="	input-group-text">User Agent</span>
+										<input class="form-control" placeholder="user agent" id="useragent" type="text"/>
+									</div>
+									<div id="xForwardedForForm" style='width: 250px;' class="input-group mb-3" title="X-Forwarded-For header to use HTTP connections.">
+										<span style='width: 120px;' class="input-group-text">X-Forwarded-For</span>
+										<input class="form-control" placeholder="ip" id="xforwardedfor" type="text"/>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="Pipe output command with format (read-only)">
+										<span style='width: 120px;' class="input-group-text">Pipe command</span>
+										<input class="form-control" disabled placeholder="cmd" id="pipeoutputcmdformated" type="text"/>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="Limit the maximum number of streams that can run per provider (0=no limit).">
+										<span style='width: 120px;' class="input-group-text">Max concurrency</span>
+										<input class="form-control" placeholder="count" id="maxconcurrentstreams" type="text"/>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="Verimatrix unique ID used for provisionning. Ex: 112233445566.">
+										<span style='width: 120px;' class="input-group-text">Verimatrix ID</span>
+										<input class="form-control" placeholder="AABBCCDDEEFF" id="vmxuniqueid" type="text"/>
+									</div>
+								</div>
+								<div>&nbsp;&nbsp;</div>
+								<div>
+									<br>
+									<div style='width: 250px;' class="input-group mb-3" title="Number of seconds to wait before auto restarting a stream on failure">
+										<span style='width: 180px;' class="input-group-text">Restart delay (s)</span>
+										<input class="form-control" placeholder="seconds" id="restartdelay" type="text"/>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="Total duration of output HLS playlist (if NbAnnouncedFragments is not set). Playlist will at least have 5 fragments.">
+										<span style='width: 180px;' class="input-group-text">HLS playlist duration (s)</span>
+										<input class="form-control" placeholder="seconds" id="playlistduraion" type="text"/>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="Force number of fragments in generated playlist">
+										<span style='width: 180px;' class="input-group-text">HLS playlist fragments count</span>
+										<input class="form-control" placeholder="count" id="nbannouncedfragments" type="text"/>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="Generated hls fragments duration (not available in resident FFmpeg mode)">
+										<span style='width: 180px;' class="input-group-text">HLS fragments duration (s)</span>
+										<input class="form-control" placeholder="seconds" id="hlsfragmentsduration" type="text"/>
+									</div>
+								</div>
+								<div>&nbsp;&nbsp;</div>
+								<div>
+									<br>
+									<div style='width: 250px;' class="input-group mb-3" title="Automatically restart every streams every N seconds, 0 to disable">
+										<span style='width: 180px;' class="input-group-text">Autorestart period (s)</span>
+										<input class="form-control" placeholder="seconds" id="autorestartperiod" type="text"/>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="Delay playback by N seconds. Cannot exceed the input manifest total duration. If 0, use SuggestedPresentationDelay for dash">
+										<span style='width: 180px;' class="input-group-text">Playback Delay (s)</span>
+										<input class="form-control" placeholder="seconds" id="playbackdelay" type="text"/>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="Spread autostarts randomnly in period in seconds">
+										<span style='width: 180px;' class="input-group-text">Random autostart period (s)</span>
+										<input class="form-control" placeholder="seconds" id="randomautostartperiod" type="text"/>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="Spread autostarts sequencially separated by period in seconds">
+										<span style='width: 180px;' class="input-group-text">Seq autostart period (s)</span>
+										<input class="form-control" placeholder="seconds" id="sequencialautostartperdiod" type="text"/>
+									</div>
+								</div>
+								<div>&nbsp;&nbsp;</div>
+								<div>
+									<br>
+									<div style='width: 250px;' class="input-group mb-3" title="Set EPG time zone. If not set, UTC is used. Used for EPG port and XML EPG, events page uses browser time">
+										<span style='width: 100px;' class="input-group-text">EPG timezone</span>
+										<select style='width: 150px;' id="epgtimezone" class="js-Selector"></select>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="Events check period in seconds (cannot be under 10s)">
+										<span style='width: 180px;' class="input-group-text">Events refresh period (s)</span>
+										<input class="form-control" placeholder="seconds" id="eventsrefreshperiod" type="text"/>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="How many times to try to get a manifest or media before failure">
+										<span style='width: 180px;' class="input-group-text">HTTP Get tentatives count</span>
+										<input class="form-control" placeholder="count" id="httpgetretries" type="text"/>
+									</div>
+									<div style='width: 250px;' class="input-group mb-3" title="Time in seconds to wait for new samples before returning a stalled error">
+										<span style='width: 180px;' class="input-group-text">Stalled stream timeout (s)</span>
+										<input class="form-control" placeholder="count" id="stalldetecttimeout" type="text"/>
+									</div>
+								</div>
+							</div>
+							<h5>Additional HTTP headers (one per line)</h5>
+							<textarea style='width: 450px;' class="form-control" placeholder="" id="headers" rows="1" ></textarea>
+						</div>
+						<div id="networkparams" class="collapse">
+							<br>
+							<div style="display: flex;">
+								<input type="submit" class="btn btn-primary btn-sm" value="APPLY NETWORK" id="applyglobalnetwork"/>
+								<div style='width: 10px;'></div>
+								<select style='width: 230px;' class="selectpicker" multiple id="networkscope">
+									<option value="script">Script</option>
+									<option value="manifest">Manifest</option>
+									<option value="media">Media files</option>
+								</select>
+							</div>
+							<br>
+							<div id="proxyForm" style='width: 700px;' class="input-group mb-3">
+								<span style='width: 140px;' class="input-group-text">HTTP/SOCKS5 Proxy</span>
+								<input class="form-control" placeholder="http://user:pass@ip:port,socks5://user:pass@ip:port,..." id="proxy" type="text"/>
+							</div>
+							<div id="bindForm" style='width: 700px;' class="input-group mb-3">
+								<span style='width: 140px;' class="input-group-text">Bind</span>
+								<input class="form-control" placeholder="bind1,bind2,..." id="bind" type="text"/>
+							</div>
+							<div id="dohForm" style='width: 700px;' class="input-group mb-3">
+								<span style='width: 140px;' class="input-group-text">DNS over HTTPS</span>
+								<input class="form-control" placeholder="url1,url2,..." id="doh" type="text"/>
+							</div>
+						</div>
+						<br>
+						<br>
+						<br>
+						<form id="addStreamForm">
+							<div style='width: 500px;' class="input-group mb-3">
+								<div class="input-group-prepend">
+									<input style='width: 135px;' type="submit" class="btn btn-outline-primary btn-sm" id="add" value="ADD STREAM" />
+								</div>
+								<input style='width: 265px;' class="form control" placeholder="stream name" id="addText" type="text" value="" />
+							</div>
+						</form>
+						<br>
+					</div>
+
+					<div style="float: right; align-items: flex-end; miargin-right: 50px;">
+						<img style="vertical-align: middle;" src="{{.ProviderId}}.png" width="220" onerror="this.style.visibility = 'hidden'" />
+					</div>
+				</div>
+
+				<div style="display: flex; width: 100%;">
+					<div>
+						<div style="display: flex;">
+							<input type="submit" class="btn btn-primary btn-sm" value="SAVE PROVIDER" id="saveprovider"/>
+							&nbsp;
+							<input type="submit" class="btn btn-primary btn-sm" value="EXPORT PROVIDER" id="exportprovider"/>
+							&nbsp;
+							<input type="submit" class="btn btn-primary btn-sm" value="EXPORT SELECTION" id="exportselection"/>
+							&nbsp;
+							<input type="submit" class="btn btn-primary btn-sm" value="DELETE SELECTION" id="deleteselection"/>
+							&nbsp;
+							<div id="globalloading"></div>
+						</div>
+						<br>
+						<div style="display: flex;">
+							<input type="submit" class="btn btn-primary btn-sm" name="start" id="startall" value="START ALL"/>
+							&nbsp;
+							<input type="submit" class="btn btn-primary btn-sm" name="stop" id="stopall" value="STOP ALL"/>
+							&nbsp;
+							<input type="submit" class="btn btn-primary btn-sm" name="refresh" id="refreshall" value="REFRESH ALL" />
+							&nbsp;
+							<input type="submit" class="btn btn-primary btn-sm" name="start" id="startpage" value="START PAGE"/>
+							&nbsp;
+							<input type="submit" class="btn btn-primary btn-sm" name="stop" id="stoppage" value="STOP PAGE"/>
+							&nbsp;
+							<input type="submit" class="btn btn-primary btn-sm" id="refreshpage" value="REFRESH PAGE" />
+							&nbsp;
+							<input type="submit" class="btn btn-primary btn-sm" name="start" id="startautostart" value="START AUTOSTART"/>
+						</div>
+					</div>
+					<div>
+						<br>
+						<form id="filterForm" style="margin-left: 50px;">
+							<div style='width: 350px;' class="input-group mb-3">
+								<span style='width: 70px;' class="input-group-text">FILTER</span>
+								<select style='text-align:center; vertical-align:middle; font-weight: bold' id="filterselection" class="form-select">
+									<option value="">Select</option>
+									<option value="channels">Channels</option>
+									<option value="events">Events</option>
+									<option value="4k">4k</option>
+									<option value="1080p">1080p</option>
+									<option value="720p">720p</option>
+									<option value="sd">SD</option>
+									<option value="running">Running</option>
+									<option value="withkeys">With Keys</option>
+									<option value="withoutkeys">Without Keys</option>
+									<option value="missingkeys">Missing Keys</option>
+									<option value="nomissingkey">No missing Key</option>
+									<option value="withmanifest">With Manifest</option>
+									<option value="withoutmanifest">Without Manifest</option>
+									<option value="error">In Error</option>
+								</select>
+								<span style='width: 100px; font-weight: bold' class="input-group-text" id="currentFilter"></span>
+								<input type="submit" class="btn btn-primary btn-sm" id="deletefilter" value="X"/>
+							</div>
+						</form>
+					</div>
+					<div>
+						<br>
+						<form id="massupdateForm" style="margin-left: 50px;">
+							<div style='width: 500px;' class="input-group mb-3">
+								<span style='width: 100px;' class="input-group-text">MASS CONFIG</span>
+								<select style='text-align:center; vertical-align:middle; font-weight: bold' id="massupdateparams" class="form-select">
+									<option value="autostart">Autostart</option>
+									<option value="ondemand">On demand</option>
+									<option value="sessionmanifest">Session manifest</option>
+									<option value="speedup">Speed up</option>
+									<option value="usecdm">CDM script</option>
+									<option value="networkoverride">Network override</option>
+									<option value="modeoverride">Mode override</option>
+									<option value="RecordEvent">Record event</option>
+									<option value="ignoreupdate">Ignore update</option>
+									<option value="fixivsize">Fix IV size</option>
+									<option value="clearmanifest">Clear Manifest</option>
+									<option value="clearmanifestscript">Clear manifest script</option>
+									<option value="clearcdm">Clear cdm script</option>
+									<option value="clearoldkeys">Clear old keys</option>
+									<option value="setwidevine">Set Widevine</option>
+									<option value="setplayready">Set Playready</option>
+									<option value="setverimatrix">Set Verimatrix</option>
+									<option value="setcdminternal">Set CDM internal</option>
+									<option value="setcdmexternal">Set CDM external</option>
+									<option value="selectbestvideo">Select best video</option>
+									<option value="selectallaudios">Select all audios</option>
+								</select>
+								&nbsp;
+								<input style='height: 30px' type="submit" class="btn btn-primary btn-sm" value="SET" id="massupdateset"/>
+								&nbsp;
+								<input style='height: 30px' type="submit" class="btn btn-primary btn-sm" value="UNSET" id="massupdateunset"/>
+								&nbsp;
+								&nbsp;
+								<div style='height: 30px; ' class="form-check">
+									<input class="form-check-input"	 type="checkbox" id="massupdateselection" />
+									<label class="form-check-label" for="massupdateselection">On selection only</label>
+								</div>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>
+		</div>
+		<br>
+
+		<table style="clear:both;" id="streamsTable" class="table table-dark">
+			<thead>
+				<TR>
+					<TH><input class="form-check-input" type="checkbox" id="checkall" /></TH><TH></TH><TH>Name</TH><TH>Status</TH><TH>Mode</TH><TH>Manifest</TH><TH>Tracks</TH><TH>Keys / CDM Script</TH><TH>Options</TH>
+				</TR>
+			</thead>
+			<tbody>
+				{{range $n, $p := .Providers}}{{range $m, $s := $p.Streams}}					<TR>
+					<TD></TD>
+					<TD></TD>
+					<TD>
+						<aside class="flexname">
+							<a style="color:white; font-size:12px; margin:auto;" id="name_{{$p.Id}}_{{$s.Id}}" type="button" class="btn btn-outline-secondary btn-bg">{{ if $s.IsEvent }}<img style="width: 20px; height: auto;" src="static/event.svg"/>&nbsp;&nbsp;{{ end }}{{$s.Name}}</a>
+							<input type="submit" class="btn btn-outline-primary btn-sm" id="renamestream_{{$p.Id}}_{{$s.Id}}" value="rename" />
+						</aside>
+					</TD>
+					<TD></TD><TD></TD><TD></TD><TD></TD><TD></TD><TD width="240px"></TD>
+				</TR>{{ end }}{{ end }}
+			</tbody>
+		</table>
+		{{ end }}
+
 		<script type="text/javascript">
 			var hls;
-			var streamsPrevParams = new Map();
+			initPlayer();
+
+			document.getElementById('configbutton').style.backgroundColor = 'darkblue';
+
+			var table = $('#streamsTable').DataTable( {
+							"lengthMenu": [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
+							"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
+							"ordering": false,
+							"responsive": true,
+							"columns": [
+						{ "width": "1%" }, { "width": "5%" }, { "width": "15%" }, { "width": "10%" }, { "width": "10%" }, { "width": "15%" }, { "width": "15%" }, { "width": "20%" },  { "width": "15%" } ]
+						});
+
+			const urlParams = new URLSearchParams(window.location.search);
+			if (urlParams.get('search')) {
+				table.search(urlParams.get('search')).draw();
+			}
+
 			var intervalId = null;
 			var PChangeCounter = new Object();
 			var GlobalChangeCounter = -2;
 
-			initPlayer();
-			document.getElementById('configbutton').style.backgroundColor = 'darkblue';
+			table.on( 'draw.dt', function() { updateStreams(table, 1);} );
 
-			document.getElementById('providerSelection').onchange = refreshConfigWithProvider;
+			var streamsPrevParams = new Map();
+
+			saveall.onclick = saveClick;
+			rescanproviders.onclick = rescanProvidersClick;
+			shutdown.onclick = shutdownClick;
+
+			addProviderForm.onsubmit = addProviderFormSubmit;
+			importprovider.onclick = importProviderClick;
+
+			{{ if .Providers }}
+			providerSelection.onchange = refreshConfigWithProvider
+			document.getElementById('providerSelection').selectedIndex = -1;
+			{{ if .ProviderId }}
+			for (i=0; i<document.getElementById('providerSelection').length; i++) {
+				if (document.getElementById('providerSelection').options[i].value == '{{ .ProviderId }}') {
+					document.getElementById('providerSelection').selectedIndex = i;
+					break
+				}
+			}
+			{{ end }}
+			{{ end }}
+
+
+			{{ if .ProviderId }}
 
 			var url = new URL(window.location.href);
 			let params = new URLSearchParams(url.search);
-			var search = params.get('search');
-			if (search) {
-				var box = document.getElementById('name_{{ .ProviderId }}_' + search);
-				if (box) { box.scrollIntoView(); }
-			}
+			document.getElementById('currentFilter').innerText = params.get('filter');
+			document.getElementById('filterselection').onchange = filterOnChange;
+			document.getElementById('deletefilter').onclick = filterDeleteOnClick;
 
-			function fillGlobal(c) {
-				function setv(id, v) { var e = document.getElementById(id); if (e) { e.value = (v === undefined || v === null) ? '' : v; } }
-				function setc(id, v) { var e = document.getElementById(id); if (e) { e.checked = !!v; } }
-				setv('runningmode', c.RunningMode);
-				setv('outputmode', c.OutputMode);
-				setv('useragent', c.UserAgent);
-				setv('script', c.Script);
-				setv('vmxuniqueid', c.VmxUniqueId);
-				setc('xforwardedfor', c.XForwardedFor);
-				setv('bind', c.Bind);
-				setv('proxy', c.Proxy);
-				setv('doh', c.Doh);
-				setv('networkscope', c.NetworkScope);
-				var h = document.getElementById('headers');
-				if (h) {
-					h.value = '';
-					if (c.Headers) { for (var i = 0; i < c.Headers.length; i++) { h.value += c.Headers[i] + '\n'; } }
-				}
-				setc('alwaysresetsession', c.AlwaysResetSession);
-				setv('autorestartperiod', c.AutorestartPeriod);
-				setv('randomautostartperiod', c.RandomAutostartPeriod);
-				setv('sequencialautostartperdiod', c.SequencialAutostartPeriod);
-				setv('restartdelay', c.RestartDelay);
-				setc('restartfinished', c.RestartFinished);
-				setv('playlistduraion', c.PlaylistDuration);
-				setv('hlsfragmentsduration', c.HlsFragmentsDuration);
-				setv('nbannouncedfragments', c.NbAnnouncedFragments);
-				setv('playbackdelay', c.PlaybackDelay);
-				setc('continuousplayback', c.ContinuousPlayback);
-				setc('nowaitfullplaylist', c.NoWaitFullPlaylist);
-				setc('ignorestaticdash', c.IgnoreStaticDash);
-				setc('usedashdelay', c.UseDashDelay);
-				setv('httpgetretries', c.HttpGetRetries);
-				setv('stalldetecttimeout', c.StallDetectTimeout);
-				setv('maxconcurrentstreams', c.MaxConcurrentStreams);
-				setc('norestartonerror', c.NoRestartOnError);
-				setc('norestartontrackchange', c.NoRestartOnTrackChange);
-				setc('eventsautorefresh', c.EventsAutorefresh);
-				setc('eventsautoremove', c.EventsAutoremove);
-				setv('eventsrefreshperiod', c.EventsRefreshPeriod);
-				setc('channelsautoremove', c.ChannelsAutoremove);
-				setc('reuseeventindex', c.ReuseEventIndex);
-				setv('epgtimezone', c.EpgTimezone);
-				setv('pipeoutputcmdformated', c.PipeOutputCmdFormated);
-			}
+			renameprovider.onclick = renameProviderClick;
+			deleteprovider.onclick = deleteProviderClick;
 
-			async function populateConfig() {
-				var pid = document.getElementById('providerSelection').value;
-				if (!pid) { return; }
-				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ Action: 'getconf', ProviderId: pid, Streams: [ { Id: 'all' } ] })
-				});
-				if (!response.ok) { return; }
-				let text = await response.text();
-				if (!text) { return; }
-				let conf = JSON.parse(text);
-				fillGlobal(conf);
-				if (conf.Streams) {
-					conf.Streams.forEach(function (s) { populateStream(s); });
-				}
-			}
+			massupdateset.onclick = massupdateClick;
+			massupdateunset.onclick = massupdateClick;
 
-			async function drmsonicSave() {
-				var pid = document.getElementById('providerSelection').value;
-				await fetch(document.getElementById('baseUrl').value + 'api/action', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ Action: 'save', ProviderId: pid })
-				});
-				showStatusWindow('saved');
-			}
+			networkscope.onchange = updateGlobal;
+			proxy.onchange = updateGlobal;
+			useragent.onchange = updateGlobal;
+			xforwardedfor.onchange = updateGlobal;
+			bind.onchange = updateGlobal;
+			doh.onchange = updateGlobal;
+			applyglobalnetwork.onclick = applyGlobalNetworkClick;
 
-			async function drmsonicAddStream() {
-				var name = document.getElementById('addText').value;
-				if (!name) { return; }
-				var pid = document.getElementById('providerSelection').value;
-				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ Action: 'addchannel', ProviderId: pid, Name: name })
-				});
-				if (!response.ok) { showStatusWindow(await response.text()); return; }
-				location.reload();
-			}
+			maxconcurrentstreams.onchange = updateGlobal;
+			script.onchange = updateGlobal;
+			runningmode.onchange = updateGlobal;
+			outputmode.onchange = updateGlobal;
 
-			async function drmsonicAddProvider() {
-				var name = document.getElementById('addProviderText').value;
-				if (!name) { return; }
-				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ Action: 'addprovider', Name: name })
-				});
-				if (!response.ok) { showStatusWindow(await response.text()); return; }
-				location.reload();
-			}
+			channelsUpdateForm.onsubmit = channelsUpdateFormSubmit;
+			channelsautoremove.onchange = updateGlobal;
 
-			async function drmsonicDeleteProvider() {
-				var pid = document.getElementById('providerSelection').value;
-				if (!pid || !confirm('Delete provider ' + pid + '?')) { return; }
-				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ Action: 'deleteprovider', ProviderId: pid })
-				});
-				if (!response.ok) { showStatusWindow(await response.text()); return; }
-				location.href = 'providers';
-			}
+			eventsRefreshForm.onsubmit = eventsRefreshFormSubmit;
+			eventsautorefresh.onchange = updateGlobal;
+			eventsautoremove.onchange = updateGlobal;
 
-			var globalMap = {
-				runningmode: 'RunningMode',
-				outputmode: 'OutputMode',
-				useragent: 'UserAgent',
-				script: 'Script',
-				vmxuniqueid: 'VmxUniqueId',
-				bind: 'Bind',
-				proxy: 'Proxy',
-				doh: 'Doh',
-				networkscope: 'NetworkScope'
-			};
+			alwaysresetsession.onchange = updateGlobal;
+			norestartonerror.onchange = updateGlobal;
+			restartfinished.onchange = updateGlobal;
+			norestartontrackchange.onchange = updateGlobal;
+			reuseeventindex.onchange = updateGlobal;
+			restartdelay.onchange = updateGlobal;
+			nbannouncedfragments.onchange = updateGlobal;
+			hlsfragmentsduration.onchange = updateGlobal;
+			playlistduraion.onchange = updateGlobal;
+			autorestartperiod.onchange = updateGlobal;
+			playbackdelay.onchange = updateGlobal;
+			randomautostartperiod.onchange = updateGlobal;
+			sequencialautostartperdiod.onchange = updateGlobal;
+			epgtimezone.onchange = updateGlobal;
+			eventsrefreshperiod.onchange = updateGlobal;
+			nowaitfullplaylist.onchange = updateGlobal;
+			continuousplayback.onchange = updateGlobal;
+			ignorestaticdash.onchange = updateGlobal;
+			usedashdelay.onchange = updateGlobal;
+			httpgetretries.onchange = updateGlobal;
+			stalldetecttimeout.onchange = updateGlobal;
+			vmxuniqueid.onchange = updateGlobal;
+			headers.onchange = updateGlobal;
 
-			async function drmsonicGlobal(id) {
-				var pid = document.getElementById('providerSelection').value;
-				var body = { Action: 'updateglobal', ProviderId: pid };
-				body[globalMap[id]] = document.getElementById(id).value;
-				await fetch(document.getElementById('baseUrl').value + 'api/action', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(body)
-				});
-			}
+			document.getElementById('networkparams').addEventListener('show.bs.collapse', function () {
+				document.getElementById('networkparamsbutton').value = '\u25B3  NETWORK PARAMETERS  \u25B3'
+			})
+			document.getElementById('networkparams').addEventListener('hide.bs.collapse', function () {
+				document.getElementById('networkparamsbutton').value = '\u25BD  NETWORK PARAMETERS  \u25BD'
+			})
+			document.getElementById('additionalparams').addEventListener('show.bs.collapse', function () {
+				document.getElementById('additionalparamsbutton').value = '\u25B3  ADDITIONAL PARAMETERS  \u25B3'
+			})
+			document.getElementById('additionalparams').addEventListener('hide.bs.collapse', function () {
+				document.getElementById('additionalparamsbutton').value = '\u25BD  ADDITIONAL PARAMETERS  \u25BD'
+			})
 
-			Object.keys(globalMap).forEach(function (id) {
-				var e = document.getElementById(id);
-				if (e) { e.onchange = function () { drmsonicGlobal(id); }; }
-			});
+			addStreamForm.onsubmit = addStreamFormSubmit;
 
-			document.getElementById('addProviderButton').onclick = function (e) { e.preventDefault(); drmsonicAddProvider(); };
-			document.getElementById('deleteProviderButton').onclick = function (e) { e.preventDefault(); drmsonicDeleteProvider(); };
-			document.getElementById('addStreamButton').onclick = function (e) { e.preventDefault(); drmsonicAddStream(); };
-			document.getElementById('saveall').onclick = function (e) { e.preventDefault(); drmsonicSave(); };
-			document.getElementById('saveprovider').onclick = function (e) { e.preventDefault(); drmsonicSave(); };
+			saveprovider.onclick = saveClick;
+			exportprovider.onclick = exportProviderClick;
+			exportselection.onclick = exportProviderClick;
+			deleteselection.onclick = deleteSelectionClick;
 
-			populateConfig();
-			intervalId = setInterval(populateConfig, 3000);
+			startall.onclick = startStopClick;
+			startautostart.onclick = startStopClick;
+			stopall.onclick = startStopClick;
+			refreshall.onclick = refreshClick;
+
+			startpage.onclick = startStopClick;
+			stoppage.onclick = startStopClick;
+			refreshpage.onclick = refreshClick;
+
+			checkall.onchange = checkallChange;
+
+			const channelsloader = document.querySelector("#channelsloading");
+			const eventsloader = document.querySelector("#eventsloading");
+			const globalloader = document.querySelector("#globalloading");
+
+			const selectorOptions = moment.tz.names()
+				  .reduce((memo, tz) => {
+				    memo.push({
+				      name: tz,
+				      offset: moment.tz(tz).utcOffset()
+				    });
+				    
+				    return memo;
+				  }, [])
+				  .sort((a, b) => {
+				    return a.offset - b.offset
+				  })
+				  .reduce((memo, tz) => {
+				    const timezone = tz.offset ? moment.tz(tz.name).format('Z') : '';
+				
+				    return memo.concat(`<option value="${tz.name}">(GMT${timezone}) ${tz.name}</option>`);
+				  }, "");
+				
+			document.querySelector(".js-Selector").innerHTML = selectorOptions;
+
+			updateStreams(table, 1);
+			intervalId=setInterval("updateStreams(table, 0);",1000);
+			{{ end }}
+
 		</script>
+
 	</body>
+
 </html>

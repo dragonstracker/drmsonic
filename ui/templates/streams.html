@@ -3,109 +3,141 @@
 	{{template "headers.html" .}}
 	<body>
 		{{template "menu.html" .}}
-
 		<div style="margin-top: -130px;">
-			<div style="display: flex;">
-				<div style="float: left">
-					<form id="filterForm">
-						<div style='width: 350px;' class="input-group mb-3">
-							<span style='width: 70px;' class="input-group-text">FILTER</span>
-							<select style='text-align:center; vertical-align:middle; font-weight: bold' id="filterselection" class="form-select">
-								<option value="">Select</option>
-								<option value="channels">Channels</option>
-								<option value="events">Events</option>
-								<option value="4k">4k</option>
-								<option value="1080p">1080p</option>
-								<option value="720p">720p</option>
-								<option value="sd">SD</option>
-								<option value="allrunning">All Running</option>
-								<option value="running">Running</option>
-								<option value="withkeys">With Keys</option>
-								<option value="withoutkeys">Without Keys</option>
-								<option value="missingkeys">Missing Keys</option>
-								<option value="nomissingkey">No missing Key</option>
-								<option value="withmanifest">With Manifest</option>
-								<option value="withoutmanifest">Without Manifest</option>
-								<option value="error">In Error</option>
-							</select>
-							<span style='width: 100px; font-weight: bold' class="input-group-text" id="currentFilter"></span>
-							<input type="submit" class="btn btn-primary btn-sm" id="deletefilter" value="X"/>
-						</div>
-					</form>
-					<br>
-					Total: &nbsp;&nbsp;{{ .StreamCount }} stream(s)
-					<br><br><br>
-					<select style='text-align:center; vertical-align:middle; font-weight: bold; width: 335px; height: 30px' id="providerSelection">
-						{{range .Providers}}
-						<option value="{{ .Id }}" {{selected .Id $.ProviderId}}>{{ .Name }}</option>
-						{{end}}
-					</select>
-				</div>
-			</div>
-			<br>
 
-			<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="streamsTable">
-				<thead>
-					<TR>
-						<TH height="100pix" colspan="10" style="text-align:center; font-size:16px; position: sticky; top: 0; border-bottom: 0;">{{ .ProviderId }}
-							&nbsp;<img id="logo" style="vertical-align: middle;" width="50" onerror="this.style.visibility = 'hidden'" /><a style="line-height:50%;">&nbsp;&nbsp;{{ .StreamCount }} stream(s)</a></TH>
-					</TR>
-				</thead>
-				<tbody>
-					{{range .Streams}}
-					{{ $n := printf "_%s_%s" $.ProviderId .Id }}
-					<TR height="60px">
-						<TD style="width:20px; text-align:center; vertical-align:middle;">
-							<input class="form-check-input" type="checkbox" id="checked{{ $n }}"/>
-						</TD>
-						<TD style="width:30px; text-align:center; vertical-align:middle;">
-							<img id="qualitylogo{{ $n }}" width="20">
-						</TD>
-						<TD style='text-align:center; vertical-align:middle; font-weight: bold; border-bottom: 0;'>
-							<a id="name{{ $n }}" type="button" class="btn btn-outline-primary"><font size="+4">{{ .Name }}</font></a>
-							<div style="line-height:20%;"><br></div>
-							<button style="border-color: transparent;" type="button" class="btn" id="startStop{{ $n }}"></button>
-							<a href="config/{{ $.ProviderId }}?search={{ .Id }}">
-								<img style="width: 20px; height: auto;" src="static/gear.svg"/>
-							</a>
-							<div hidden id="statusfull{{ $n }}"></div>
-							<div style="line-height:20%;"><br></div>
-							<pre style="white-space: pre-wrap;" id="status{{ $n }}"></pre>
-							<div style="line-height:0%;"><br></div>
-							<pre style="white-space: pre-wrap;" id="streamerrors{{ $n }}"></pre>
-							<div style="line-height:40%;"><br></div>
-						</TD>
-					</TR>
+                <div style="display: flex;">
+			<div style="float: left">
+				<form id="filterForm">
+					<div style='width: 350px;' class="input-group mb-3">
+						<span style='width: 70px;' class="input-group-text">FILTER</span>
+						<select style='text-align:center; vertical-align:middle; font-weight: bold' id="filterselection" class="form-select">
+							<option value="">Select</option>
+							<option value="channels">Channels</option>
+							<option value="events">Events</option>
+							<option value="4k">4k</option>
+							<option value="1080p">1080p</option>
+							<option value="720p">720p</option>
+							<option value="sd">SD</option>
+							<option value="allrunning">All Running</option>
+							<option value="running">Running</option>
+							<option value="withkeys">With Keys</option>
+							<option value="withoutkeys">Without Keys</option>
+							<option value="missingkeys">Missing Keys</option>
+							<option value="nomissingkey">No missing Key</option>
+							<option value="withmanifest">With Manifest</option>
+							<option value="withoutmanifest">Without Manifest</option>
+							<option value="error">In Error</option>
+						</select>
+						<span style='width: 100px; font-weight: bold' class="input-group-text" id="currentFilter"></span>
+						<input type="submit" class="btn btn-primary btn-sm" id="deletefilter" value="X"/>
+					</div>
+				</form>
+				<br>
+				Total: &nbsp;&nbsp;{{$.StreamsCount}} stream(s)
+				<br>
+				<br>
+				<br>
+
+				{{ if .Providers }}
+				<select style='text-align:center; vertical-align:middle; font-weight: bold; width: 335px; height: 30px' id="providerSelection" >
+					{{range $n, $g := .Providers}}
+					<option value="{{$g.Id}}">{{$g.Name}}</option>
 					{{end}}
-				</tbody>
-			</table>
-			<br><br>
+				</select>
+				{{ end }}
+
+			</div>
+		</div>
+
+		<br>
+
+		{{range $n, $p := .Providers}}
+			{{ if $p.Streams }}
+				<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="streamsTable">
+					<thead>
+						<TR>
+							<TH height="100pix" colspan="10" style="text-align:center; font-size:16px; position: sticky; top: 0; border-bottom: 0;">{{$p.Name}}
+								&nbsp;<img id="logo" style="vertical-align: middle;" width="50" onerror="this.style.visibility = 'hidden'" /><a style="line-height:50%;">&nbsp;&nbsp;{{len $p.Streams}} stream(s)</a></TH>
+						</TR>
+					</thead>
+					<tbody>
+					{{range $m, $s := $p.Streams}}
+						{{ if each 10 $m }}
+						{{ if ne 0 $m }}
+						</TR>
+						{{ end }}
+						<TR height="60px">
+						{{ end }}
+							<TD style='text-align:center; vertical-align:middle; font-weight: bold; border-bottom: 0;'>
+								<a id="name_{{$p.Id}}_{{$s.Id}}" type="button" class="btn btn-outline-primary"><font size="+4">{{$s.Name}}</font></a>
+								<div style="line-height:20%;"><br></div>
+								<img id="qualitylogo_{{$p.Id}}_{{$s.Id}}" width="20">
+								{{ if $s.IsEvent }}&nbsp;&nbsp;&nbsp;<img data-bs-toggle="tooltip" data-bs-title="Event" style="width: 20px; height: auto;" src="static/event.svg"/>{{ end }}
+								{{ if $.IsAdmin }}
+								<button style="border-color: transparent;" type="button" class="btn" id="startStop_{{$p.Id}}_{{$s.Id}}"></button>
+								<a href="config/{{$p.Id}}?search={{$s.Name}}">
+									<img style="width: 20px; height: auto;" src="static/gear.svg"/>
+								</a>
+								{{ end }}
+								<div hidden id="statusfull_{{$p.Id}}_{{$s.Id}}"></div>
+								<div style="line-height:20%;"><br></div>
+								<pre style="white-space: pre-wrap;" id="status_{{$p.Id}}_{{$s.Id}}"></pre>
+								<div style="line-height:0%;"><br></div>
+								<pre style="white-space: pre-wrap;" id="streamerrors_{{$p.Id}}_{{$s.Id}}"></pre>
+								<div style="line-height:40%;"><br></div>
+							</TD>
+					{{ end }}
+					{{ if tablenotmod $p.Streams 10 }}
+						</TR>
+					{{ end }}
+					</tbody>
+				</table>
+				<br>
+				<br>
+			{{ end }}
+		{{ end }}
+
 		</div>
 
 		<script type="text/javascript">
 			const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
 			const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
 
+			var hls;
 			initPlayer();
 
 			document.getElementById('statusbutton').style.backgroundColor = 'darkblue';
 
 			var url = new URL(window.location.href);
 			let params = new URLSearchParams(url.search);
-			document.getElementById('currentFilter').innerText = params.get('filter') || "";
+			document.getElementById('currentFilter').innerText = params.get('filter');
 			document.getElementById('filterselection').onchange = filterOnChange;
 			document.getElementById('deletefilter').onclick = filterDeleteOnClick;
 
+			{{ if .Providers }}
 			document.getElementById('providerSelection').selectedIndex = -2;
-			for (i=0; i<document.getElementById('providerSelection').length; i++) {
-				if (document.getElementById('providerSelection').options[i].value == '{{ .ProviderId }}') {
-					document.getElementById('providerSelection').selectedIndex = i;
+			if (params.get('filter') != 'allrunning') {
+				for (i=0; i<document.getElementById('providerSelection').length; i++) {
+					if (document.getElementById('providerSelection').options[i].value == '{{ .ProviderId }}') {
+						document.getElementById('providerSelection').selectedIndex = i;
+						break
+					}
 				}
 			}
-			document.getElementById('providerSelection').onchange = refreshStatusWithProvider;
+				
+			providerSelection.onchange = refreshStatusWithProvider
+			{{ end }}
+
+			{{ if .ProviderId }}
+			document.getElementById('logo').src="{{.ProviderId}}.png"
+			{{ end}}
+
+			{{ if gt .StreamsCount 0 }}
 
 			updateStatus();
-			intervalId = setInterval("updateStatus();", 1000);
+			intervalId=setInterval("updateStatus();",1000);
+
+			{{ end }}
 		</script>
 	</body>
 </html>

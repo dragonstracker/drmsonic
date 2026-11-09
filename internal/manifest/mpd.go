@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"drmsonic/internal/mp4"
 )
 
 type MPD struct {
@@ -29,15 +31,17 @@ type Period struct {
 }
 
 type AdaptationSet struct {
-	ID              string           `xml:"id,attr"`
-	MimeType        string           `xml:"mimeType,attr"`
-	ContentType     string           `xml:"contentType,attr"`
-	Lang            string           `xml:"lang,attr"`
-	Label           string           `xml:"Label"`
-	BaseURL         []string         `xml:"BaseURL"`
-	Template        *SegmentTemplate `xml:"SegmentTemplate"`
-	List            *SegmentList     `xml:"SegmentList"`
-	Representations []Representation `xml:"Representation"`
+	ID              string              `xml:"id,attr"`
+	MimeType        string              `xml:"mimeType,attr"`
+	ContentType     string              `xml:"contentType,attr"`
+	Lang            string              `xml:"lang,attr"`
+	Label           string              `xml:"Label"`
+	BaseURL         []string            `xml:"BaseURL"`
+	Template        *SegmentTemplate    `xml:"SegmentTemplate"`
+	List            *SegmentList        `xml:"SegmentList"`
+	Base            *SegmentBase        `xml:"SegmentBase"`
+	Protection      []ContentProtection `xml:"ContentProtection"`
+	Representations []Representation    `xml:"Representation"`
 }
 
 type Representation struct {
@@ -52,6 +56,7 @@ type Representation struct {
 	BaseURL           []string            `xml:"BaseURL"`
 	Template          *SegmentTemplate    `xml:"SegmentTemplate"`
 	List              *SegmentList        `xml:"SegmentList"`
+	Base              *SegmentBase        `xml:"SegmentBase"`
 	Protection        []ContentProtection `xml:"ContentProtection"`
 }
 
@@ -86,6 +91,14 @@ type SegmentList struct {
 type SegmentURL struct {
 	Media      string `xml:"media,attr"`
 	MediaRange string `xml:"mediaRange,attr"`
+	Range      string `xml:"range,attr"`
+}
+
+type SegmentBase struct {
+	Timescale              int64       `xml:"timescale,attr"`
+	PresentationTimeOffset int64       `xml:"presentationTimeOffset,attr"`
+	IndexRange             string      `xml:"indexRange,attr"`
+	Initialization         *SegmentURL `xml:"Initialization"`
 }
 
 type ContentProtection struct {
@@ -111,6 +124,10 @@ type Track struct {
 	Template    *SegmentTemplate
 	List        *SegmentList
 	Base        *url.URL
+	SegBase     *SegmentBase
+	FileURL     string
+	InitRange   string
+	IndexRange  string
 	PTO         int64
 	KID         string
 	StartNumber int64
@@ -158,6 +175,12 @@ func ParseMPD(data []byte, pageURL *url.URL) (*Manifest, error) {
 
 	for _, p := range mpd.Periods {
 		pBase := resolveURL(root, firstOf(p.BaseURL))
+		periodDuration := parseDuration(p.Duration)
+		if periodDuration == 0 {
+			periodDuration = m.Duration
+		}
+
+		startVideo, startAudio, startAll := len(m.Video), len(m.Audio), len(m.All)
 
 		for _, as := range p.AdaptationSets {
 			asBase := resolveURL(pBase, firstOf(as.BaseURL))
@@ -167,6 +190,7 @@ func ParseMPD(data []byte, pageURL *url.URL) (*Manifest, error) {
 
 				tmpl := mergeTemplate(as.Template, rep.Template)
 				list := mergeList(as.List, rep.List)
+				base := mergeBase(as.Base, rep.Base)
 
 				tr := Track{
 					Kind:      kind,
@@ -181,17 +205,18 @@ func ParseMPD(data []byte, pageURL *url.URL) (*Manifest, error) {
 					Base:      repBase,
 					Timescale: 1000,
 					StartedAt: m.StartedAt,
-					Duration:  m.Duration,
+					Duration:  periodDuration,
 				}
 				if kind == "text" {
 					continue
 				}
 
-				if tmpl == nil && list == nil {
+				if tmpl == nil && list == nil && base == nil {
 					continue
 				}
 				tr.Template = tmpl
 				tr.List = list
+				tr.SegBase = base
 
 				timescale := int64(1000)
 				pto := int64(0)
@@ -213,6 +238,18 @@ func ParseMPD(data []byte, pageURL *url.URL) (*Manifest, error) {
 					if list.Initialization != nil {
 						initPattern = list.Initialization.Media
 					}
+				} else if base != nil {
+					if base.Timescale > 0 {
+						timescale = base.Timescale
+					}
+					pto = base.PresentationTimeOffset
+					tr.FileURL = repBase.String()
+					tr.IndexRange = strings.TrimSpace(base.IndexRange)
+					if base.Initialization != nil && base.Initialization.Range != "" {
+						tr.InitRange = base.Initialization.Range
+					} else if tr.IndexRange != "" {
+						tr.InitRange = initRangeBefore(tr.IndexRange)
+					}
 				}
 				tr.Timescale = timescale
 				tr.PTO = pto
@@ -225,7 +262,11 @@ func ParseMPD(data []byte, pageURL *url.URL) (*Manifest, error) {
 					tr.FrameRate = normalizeFrameRate(tr.FrameRate)
 				}
 
-				for _, cp := range rep.Protection {
+				protection := rep.Protection
+				if len(protection) == 0 {
+					protection = as.Protection
+				}
+				for _, cp := range protection {
 					if cp.DefaultKID != "" {
 						tr.KID = normaliseKID(cp.DefaultKID)
 					}
@@ -239,6 +280,13 @@ func ParseMPD(data []byte, pageURL *url.URL) (*Manifest, error) {
 				}
 				m.All = append(m.All, tr)
 			}
+		}
+
+		if len(m.Video) > startVideo || len(m.Audio) > startAudio {
+			break
+		}
+		if len(m.All) == startAll {
+			continue
 		}
 	}
 	return m, nil
@@ -281,6 +329,7 @@ type SegmentRef struct {
 	Time     int64
 	Duration int64
 	URL      string
+	Range    string
 }
 
 func (t *Track) SegmentCount() int {
@@ -330,6 +379,15 @@ func (t *Track) tailTemplate(tail int) []SegmentRef {
 		count := it.R + 1
 		if it.R < 0 {
 			count = 1
+			if it.D > 0 && !t.DurationZero() {
+				total := t.EndTicks()
+				if total > start {
+					count = int((total - start) / it.D)
+				}
+			}
+			if count < 1 {
+				count = 1
+			}
 		}
 		for i := 0; i < count; i++ {
 			entries = append(entries, entry{time: start + int64(i)*it.D, duration: it.D})
@@ -415,6 +473,30 @@ func (t *Track) tailDuration(tail int) []SegmentRef {
 	return refs
 }
 
+func mergeBase(parent, child *SegmentBase) *SegmentBase {
+	if parent == nil {
+		return child
+	}
+	if child == nil {
+		out := *parent
+		return &out
+	}
+	out := *parent
+	if child.Timescale > 0 {
+		out.Timescale = child.Timescale
+	}
+	if child.PresentationTimeOffset != 0 {
+		out.PresentationTimeOffset = child.PresentationTimeOffset
+	}
+	if child.IndexRange != "" {
+		out.IndexRange = child.IndexRange
+	}
+	if child.Initialization != nil {
+		out.Initialization = child.Initialization
+	}
+	return &out
+}
+
 func mergeTemplate(parent, child *SegmentTemplate) *SegmentTemplate {
 	if parent == nil {
 		return child
@@ -494,10 +576,74 @@ func (t *Track) tailList(tail int) []SegmentRef {
 			Time:     cursor,
 			Duration: list.Duration,
 			URL:      resolveURL(t.Base, u).String(),
+			Range:    list.SegmentURLs[i].Range,
 		})
 		cursor += list.Duration
 	}
 	return refs
+}
+
+func (t *Track) DurationZero() bool {
+	return t.Duration <= 0
+}
+
+func (t *Track) EndTicks() int64 {
+	if t.Duration <= 0 {
+		return 0
+	}
+	scale := t.Timescale
+	if scale <= 0 {
+		scale = 1000
+	}
+	return int64(t.Duration.Seconds()*float64(scale)) + t.PTO
+}
+
+func (t *Track) RangeSegments(sidx *mp4.Sidx, tail int) []SegmentRef {
+	if sidx == nil || len(sidx.Refs) == 0 {
+		return nil
+	}
+	total := int64(len(sidx.Refs))
+	from := int64(0)
+	if tail > 0 && total > int64(tail) {
+		from = total - int64(tail)
+	}
+	refs := make([]SegmentRef, 0, total-from)
+	cursor := sidx.End + sidx.FirstOffset
+	ticks := sidx.Earliest
+	for i := int64(0); i < total; i++ {
+		ref := sidx.Refs[i]
+		if i >= from {
+			refs = append(refs, SegmentRef{
+				Number:   i + 1,
+				Time:     ticks,
+				Duration: ref.Duration,
+				URL:      t.FileURL,
+				Range:    byteRange(cursor, ref.Size),
+			})
+		}
+		cursor += ref.Size
+		ticks += ref.Duration
+	}
+	return refs
+}
+
+func byteRange(start, size int64) string {
+	if size <= 0 {
+		return ""
+	}
+	return strconv.FormatInt(start, 10) + "-" + strconv.FormatInt(start+size-1, 10)
+}
+
+func initRangeBefore(indexRange string) string {
+	parts := strings.SplitN(indexRange, "-", 2)
+	if len(parts) == 0 {
+		return ""
+	}
+	start, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+	if err != nil || start <= 0 {
+		return ""
+	}
+	return byteRange(0, start)
 }
 
 func (t *Track) SegmentDurationSeconds() float64 {

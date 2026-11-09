@@ -54,7 +54,7 @@ func (s *Server) checkStatic(user, pass string) bool {
 
 func (s *Server) storeUser(name string) (config.User, bool) {
 	for _, u := range s.store.Users() {
-		if u.Username == name && u.WebAccess {
+		if u.Username == name && u.HasWebAccess {
 			return u, true
 		}
 	}
@@ -72,7 +72,7 @@ func (s *Server) checkStoreUser(name, pass string) bool {
 func (s *Server) currentUser(r *http.Request) (config.User, bool) {
 	if u, p, ok := r.BasicAuth(); ok {
 		if s.checkStatic(u, p) {
-			return config.User{Username: u, IsAdmin: true, WebAccess: true}, true
+			return config.User{Username: u, IsAdmin: true, HasWebAccess: true}, true
 		}
 		if s.checkStoreUser(u, p) {
 			if su, ok := s.storeUser(u); ok {
@@ -86,10 +86,10 @@ func (s *Server) currentUser(r *http.Request) (config.User, bool) {
 		}
 	}
 	if s.opts.User == "" && s.opts.Password == "" {
-		return config.User{Username: "no-auth", IsAdmin: true, WebAccess: true}, true
+		return config.User{Username: "no-auth", IsAdmin: true, HasWebAccess: true}, true
 	}
 	if s.allowListed(remoteIP(r)) {
-		return config.User{Username: "no-auth", IsAdmin: true, WebAccess: true}, true
+		return config.User{Username: "no-auth", IsAdmin: true, HasWebAccess: true}, true
 	}
 	return config.User{}, false
 }

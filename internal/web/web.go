@@ -43,29 +43,33 @@ type Server struct {
 }
 
 type Page struct {
-	Title    string
-	Version  string
-	Tag      string
-	BaseURL  string
-	Username string
-	IsAdmin  bool
-	LoggedIn bool
+	Title      string
+	Version    string
+	Tag        string
+	BaseUrl    string
+	LoggedUser string
+	IsAdmin    bool
+	LoggedIn   bool
 
-	Providers    []*config.Provider
-	Provider     *config.Provider
-	ProviderId   string
-	Streams      []config.Stream
-	Status       state.StatusResponse
-	Users        []config.User
-	Recordings   []config.Recording
-	Replays      []config.Recording
-	Events       []EventRow
-	Help         template.HTML
-	Debug        string
-	RunningModes []string
-	OutputModes  []string
-	CdmTypes     []string
-	ModeNames    []string
+	Providers       []*config.Provider
+	Provider        *config.Provider
+	ProviderId      string
+	Streams         []config.Stream
+	StreamsCount    int
+	InternalUdpOnly bool
+	Status          state.StatusResponse
+	Users           []config.User
+	Recordings      []config.Recording
+	Replays         []config.Recording
+	Events          []EventRow
+	Timezone        string
+	Entries         []EventRow
+	Help            template.HTML
+	Debug           string
+	RunningModes    []string
+	OutputModes     []string
+	CdmTypes        []string
+	ModeNames       []string
 }
 
 type EventRow struct {
@@ -135,6 +139,24 @@ func New(opts Options, store *config.Store, mgr *state.Manager) (*Server, error)
 			return strings.Join(h, "\n")
 		},
 		"add": func(a, b int) int { return a + b },
+		"each": func(n, i int) bool {
+			return n > 0 && i%n == 0
+		},
+		"tablenotmod": func(v any, n int) bool {
+			if n <= 0 {
+				return false
+			}
+			switch list := v.(type) {
+			case []config.Stream:
+				return len(list)%n != 0
+			case []config.User:
+				return len(list)%n != 0
+			case []*config.Provider:
+				return len(list)%n != 0
+			}
+			return false
+		},
+		"fmtSize": func(n int) string { return fmt.Sprintf("%d", n) },
 	}
 
 	tmpl, err := template.New("root").Funcs(funcs).ParseFS(ui.Templates(), "*.html")
@@ -233,19 +255,22 @@ func (s *Server) basePage(r *http.Request) Page {
 	p := Page{
 		Version:      config.VersionName,
 		Tag:          config.VersionTag,
-		BaseURL:      s.opts.BaseURL,
+		BaseUrl:      "/",
 		RunningModes: config.RunningModes,
 		OutputModes:  config.OutputModes,
 		CdmTypes:     []string{config.CdmWidevine, config.CdmPlayReady, config.CdmVerimatrix},
 		ModeNames:    []string{config.ModeLive, config.ModeReplay, config.ModeVOD},
 		Providers:    s.store.Providers(),
 	}
+	for _, prov := range s.store.Providers() {
+		p.StreamsCount += len(prov.Streams)
+	}
 	if ok {
-		p.Username = u.Username
+		p.LoggedUser = u.Username
 		p.IsAdmin = u.IsAdmin
 		p.LoggedIn = true
 	} else {
-		p.Username = "no-auth"
+		p.LoggedUser = "no-auth"
 		p.IsAdmin = true
 		p.LoggedIn = true
 	}

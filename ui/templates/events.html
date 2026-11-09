@@ -1,91 +1,97 @@
-<!DOCTYPE html>
 <html>
 	{{template "headers.html" .}}
 	<body>
 		{{template "menu.html" .}}
-
-		<div style="margin-top: -120px; margin-left: 20px; margin-right: 20px;">
-			<div class="input-group mb-3" style="width: 520px;">
-				<span class="input-group-text">PROVIDER</span>
-				<select class="form-select" id="providerSelection">
-					{{range .Providers}}
-					<option value="{{ .Id }}" {{selected .Id $.ProviderId}}>{{ .Name }}</option>
-					{{end}}
-				</select>
-				<button class="btn btn-primary" id="eventsrefresh" onclick="dsRefreshEvents()">REFRESH</button>
-			</div>
-
-			<div id="eventsstatus" class="mb-3"></div>
-
-			<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="eventstable">
-				<thead>
-					<TR>
-						<TH style="text-align:center;">Channel</TH>
-						<TH style="text-align:center;">Title</TH>
-						<TH style="text-align:center;">Start</TH>
-						<TH style="text-align:center;">End</TH>
-						<TH style="text-align:center;">Actions</TH>
-					</TR>
-				</thead>
-				<tbody>
-					{{range .Events}}
-					<TR>
-						<TD style="text-align:center;">{{ .Channel }}</TD>
-						<TD style="text-align:center;">{{ .Title }}</TD>
-						<TD style="text-align:center;">{{ .StartFmt }}</TD>
-						<TD style="text-align:center;">{{ .EndFmt }}</TD>
-						<TD style="text-align:center;"></TD>
-					</TR>
-					{{else}}
-					<TR><TD colspan="5" style="text-align:center;">no events</TD></TR>
-					{{end}}
-				</tbody>
-			</table>
-
-			<br><br>
-			<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="replaystable">
-				<thead>
-					<TR>
-						<TH style="text-align:center;">Title</TH>
-						<TH style="text-align:center;">Channel</TH>
-						<TH style="text-align:center;">Start</TH>
-						<TH style="text-align:center;">End</TH>
-						<TH style="text-align:center;">Actions</TH>
-					</TR>
-				</thead>
-				<tbody>
-					{{range .Replays}}
-					<TR>
-						<TD style="text-align:center;">{{ .Title }}</TD>
-						<TD style="text-align:center;">{{ .Channel }}</TD>
-						<TD style="text-align:center;">{{ .StartFmt }}</TD>
-						<TD style="text-align:center;">{{ .EndFmt }}</TD>
-						<TD style="text-align:center;"></TD>
-					</TR>
-					{{else}}
-					<TR><TD colspan="5" style="text-align:center;">no replays</TD></TR>
-					{{end}}
-				</tbody>
-			</table>
+		{{ if .Providers }}
+		<br>
+		<div style="display: flex; margin-top: -100px;">
+			<select style='text-align:center; vertical-align:middle; font-weight: bold; width: 335px; height: 30px' id="providerSelection" >
+				{{range $n, $g := .Providers}}
+				<option value="{{$g.Id}}">{{$g.Name}}</option>
+				{{end}}
+			</select>
 		</div>
+		<br>
+		<a id="eventsstatus" style="margin-left: 20px"></a>
+		<br>
+		<br>
+		{{ end }}
+
+		<h2 style='text-align:center;'>Schedule</h2>
+		<table style="clear:both;" id="epgtable" class="table table-dark table-bordered" border="1" >
+			<thead>
+				<TR style='text-align:center; vertical-align:middle;'>
+					<TH>Title</TH>
+					<TH>Status</TH>
+					<TH>Start Date</TH>
+					<TH>End Date</TH>
+					<TH>Event Id</TH>
+					<TH>Action</TH>
+				</TR>
+			</thead>
+			<tbody>
+			</tbody>
+		</table>
+
+		<br>
+		<h2 style='text-align:center;'>Replays</h2>
+		<table style="clear:both;" id="replaystable" class="table table-dark table-bordered" border="1" >
+			<thead>
+				<TR style='text-align:center; vertical-align:middle;'>
+					<TH>Title</TH>
+					<TH>Start Date</TH>
+					<TH>End Date</TH>
+					<TH>Event Id</TH>
+					<TH></TH>
+				</TR>
+			</thead>
+			<tbody>
+			</tbody>
+		</table>
+
 
 		<script type="text/javascript">
-			document.getElementById('eventsbutton').style.backgroundColor = 'darkblue';
+
+			var hls;
 			initPlayer();
 
-			document.getElementById('providerSelection').onchange = function () {
-				location.href = 'events/' + this.value;
-			};
+			document.getElementById('eventsbutton').style.backgroundColor = 'darkblue';
+			const eventsloader = document.querySelector("#eventsloading");
+			providerSelection.onchange = refreshEpgWithProvider
 
-			async function dsRefreshEvents() {
-				var pid = document.getElementById('providerSelection').value;
-				await fetch(document.getElementById('baseUrl').value + 'api/action', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ Action: 'eventsrefreshrequest', ProviderId: pid })
-				});
-				location.reload();
+			{{ if .ProviderId }}
+			for (i=0; i<document.getElementById('providerSelection').length; i++) {
+				if (document.getElementById('providerSelection').options[i].value == '{{ .ProviderId }}') {
+					document.getElementById('providerSelection').selectedIndex = i;
+					break
+				}
 			}
+			{{ end }}
+
+			var epgtable = $('#epgtable').DataTable( {
+							"lengthMenu": [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
+							"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
+							"ordering": false,
+							"responsive": true,
+							"columns": [
+						{ "width": "20%" }, { "width": "10%" }, { "width": "20%" }, { "width": "20%" }, { "width": "5%" }, { "width": "5%" } ]
+						});
+			var replaystable = $('#replaystable').DataTable( {
+							"lengthMenu": [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
+							"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
+							"ordering": false,
+							"responsive": true,
+							"columns": [
+						{ "width": "20%" }, { "width": "20%" }, { "width": "20%" }, { "width": "20%" }, { "width": "10%" } ]
+						});
+
+			getReplays(replaystable);
+			getEvents(epgtable);
+
+			updateEvents(epgtable);
+			intervalId=setInterval("updateEvents(epgtable);",1000);
 		</script>
+
 	</body>
+
 </html>

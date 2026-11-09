@@ -1,80 +1,131 @@
-<!DOCTYPE html>
 <html>
 	{{template "headers.html" .}}
 	<body>
 		{{template "menu.html" .}}
+		<div style="width: 100%; overflow:hidden;">
+			<div style="float: left; margin-left: 20px;">
+				<form id="addUserForm">
+					<div style='width: 350px;' class="input-group mb-3">
+						<div class="input-group-prepend">
+							<input style='width: 135px;' type="submit" class="btn btn-outline-primary btn-sm" id="add" value="ADD USER" />
+						</div>
+						<input class="form control" placeholder="user name" aria-label="user name"  id="addUserText" type="text" value="" />
+					</div>
 
-		<div style="margin-top: -120px; margin-left: 20px; margin-right: 20px;">
-			<div class="input-group mb-3" style="width: 720px;">
-				<span class="input-group-text">NEW USER</span>
-				<input type="text" class="form-control" id="addUserText" placeholder="username"/>
-				<input type="password" class="form-control" id="addUserPassword" placeholder="password"/>
-				<button class="btn btn-primary" id="addUserButton" onclick="dsAddUser()">ADD</button>
+				</form>
+				<br>
+				<input type="submit" style="width:150px" class="btn btn-primary btn-sm" value="SAVE USERS" id="saveusers"/>
+				<br>
 			</div>
-
-			<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="usersTable">
-				<thead>
-					<TR>
-						<TH style="text-align:center;">Username</TH>
-						<TH style="text-align:center;">Is admin</TH>
-						<TH style="text-align:center;">Web access</TH>
-						<TH style="text-align:center;">Actions</TH>
-					</TR>
-				</thead>
-				<tbody>
-					{{range .Users}}
-					<TR>
-						<TD style="text-align:center;">{{ .Username }}</TD>
-						<TD style="text-align:center;">{{ .IsAdmin }}</TD>
-						<TD style="text-align:center;">{{ .WebAccess }}</TD>
-						<TD style="text-align:center;">
-							<button class="btn btn-secondary btn-sm" onclick="dsRenameUser('{{ .Username }}')">RENAME</button>
-							<button class="btn btn-danger btn-sm" onclick="dsDeleteUser('{{ .Username }}')">DELETE</button>
-						</TD>
-					</TR>
-					{{else}}
-					<TR><TD colspan="4" style="text-align:center;">no users</TD></TR>
-					{{end}}
-				</tbody>
-			</table>
 		</div>
+		<br>
+		<table style="clear:both;" id="usersTable" class="table table-dark table-bordered" border="1" >
+			<thead>
+				<TR style='text-align:center; vertical-align:middle;'>
+					<TH>User</TH>
+					<TH>Password</TH>
+					<TH>Providers</TH>
+					<TH>Networks</TH>
+					<TH>Parameters</TH>
+					<TH></TH>
+				</TR>
+			</thead>
+			<tbody>
+				{{range $n, $s := .Users}}
+				<TR>
+					<TD style='text-align:center; vertical-align:middle; width:250px'>
+						<a style="width:250px;text-align:center; vertical-align:middle" id="username{{$n}}" >{{$s.Username}}</a>
+					</TD>
+					<TD style='text-align:center; vertical-align:middle; width:250px'>
+						<div id="passwordDiv{{$n}}">
+							<input class="form-control" placeholder="password" aria-label="password" id="password{{$n}}" type="text" value="hidden"/>
+						</div>
+					</TD>
+					<TD style='text-align:center; vertical-align:middle; width:250px'>
+						<select class="selectpicker" multiple aria-label="size 2 select example" id="userProviders{{$n}}">
+							{{range $m, $p := $.Providers}}
+							<option value="{{$p.Id}}">{{$p.Name}}</option>
+							{{end}}
+						</select>
+					</TD>
+					<TD style='text-align:center; vertical-align:middle; width:250px'>
+						<div id="networkDiv{{$n}}">
+							<input class="form-control" placeholder="networks or ips" aria-label="networks or ips" id="network{{$n}}" type="text" value="{{$s.Network}}"/>
+						</div>
+					</TD>
+					<TD style='text-align:center; vertical-align:middle; width:250px'>
+						<div class="form-check" id="isadminDiv{{$n}}">
+							<input class="form-check-input" type="checkbox" id="isadmin{{$n}}" {{ if $s.IsAdmin }} checked {{ end }}/>
+							<label class="form-check-label" for="isadmin{{$n}}">Admin</label>
+						</div>
+						<div class="form-check" id="haswebaccessDiv{{$n}}">
+							<input class="form-check-input" type="checkbox" id="haswebaccess{{$n}}" {{ if $s.HasWebAccess }} checked {{ end }}/>
+							<label class="form-check-label" for="haswebaccess{{$n}}">Web Access</label>
+						</div>
+					</TD>
+					<TD style='text-align:center; vertical-align:middle; width:100px'>
+						<div style="display: flex;">
+							<div class="dropdown">
+								<button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+									PLAYLIST
+								</button>
+								<ul class="dropdown-menu">
+									<li><a class="dropdown-item" href="playlist.m3u?user={{$s.Username}}">Full</a></li>
+									<li><a class="dropdown-item" href="live.m3u?user={{$s.Username}}">Live</a></li>
+									<li><a class="dropdown-item" href="event.m3u?user={{$s.Username}}">Events</a></li>
+									<li><a class="dropdown-item" href="replay.m3u?user={{$s.Username}}">Replays</a></li>
+									<li><a class="dropdown-item" href="app1.conf?user={{$s.Username}}">App1</a></li>
+								</ul>
+							</div>
+							&nbsp;&nbsp;
+							<input type="button" class="btn btn-primary" id="renameuser{{$n}}" value="RENAME" />
+							&nbsp;&nbsp;
+							<input type="button" class="btn btn-primary" id="deleteuser{{$n}}" value="DELETE" />
+						</div>
+					</TD>
+
+				</TR>
+				{{ end }}
+
+			</tbody>
+		</table>
 
 		<script type="text/javascript">
 			document.getElementById('usersbutton').style.backgroundColor = 'darkblue';
 
-			async function dsPost(body) {
-				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(body)
-				});
-				if (!response.ok) { showStatusWindow(await response.text()); return false; }
-				return true;
-			}
+			addUserForm.onsubmit = addUserFormSubmit;
+			saveusers.onclick = saveClick;
 
-			async function dsAddUser() {
-				var name = document.getElementById('addUserText').value;
-				var pass = document.getElementById('addUserPassword').value;
-				if (!name) { return; }
-				if (await dsPost({ Action: 'adduser', User: { Username: name, Password: pass, WebAccess: true } })) {
-					location.reload();
-				}
-			}
+			var intervalId = null;
+			var PChangeCounter = new Object();
+			var GlobalChangeCounter = -2;
 
-			async function dsDeleteUser(name) {
-				if (!confirm('Delete user ' + name + '?')) { return; }
-				if (await dsPost({ Action: 'deleteuser', User: { Username: name } })) {
-					location.reload();
-				}
-			}
+			{{range $n, $c := .Users}}
+				passwordDiv{{$n}}.onchange = updateUser;
+				networkDiv{{$n}}.onchange = updateUser;
+				userProviders{{$n}}.onchange = updateUser;
+				isadminDiv{{$n}}.onchange = updateUser;
+				haswebaccessDiv{{$n}}.onchange = updateUser;
+				deleteuser{{$n}}.onclick = deleteUserClick;
+				renameuser{{$n}}.onclick = renameUserClick;
 
-			async function dsRenameUser(name) {
-				var next = prompt('New user name', name);
-				if (!next || next === name) { return; }
-				if (await dsPost({ Action: 'renameuser', OldUsername: name, Name: next })) {
-					location.reload();
+				var picker = document.getElementById('userProviders{{$n}}')
+				for (i=0; i<picker.length; i++) {
+					{{range $m, $p := .ProviderIds}}
+						if ('{{$p}}' == picker[i].value) {
+							picker[i].selected = true
+						}
+					{{end}}
 				}
-			}
+			{{end}}
+
+			var usersTable = $('#usersTable').removeAttr('width').DataTable( {
+								"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
+								"autoWidth": false
+						});
+
 		</script>
+
 	</body>
+
 </html>

@@ -1,5 +1,5 @@
 {{ $mp := .MenuProvider }}
-<div class="badge bg-primary" style="float: right; margin-right: 20px; margin-top: 10px; margin-bottom: -40px">Logged as {{ .Username }}</div>
+<div class="badge bg-primary" style="float: right; margin-right: 20px; margin-top: 10px; margin-bottom: -40px">Logged as {{ .LoggedUser }}</div>
 <div style="display:inline-block;">
 	<div style="float: left; margin-top: 10px; margin-left: 20px; margin-right: 70px;">
 		<pre>
@@ -14,9 +14,9 @@
 		<a id="providersbutton" href="providers" class="btn btn-primary" style="width:100px;">Providers</a>
 		<a id="statusbutton" href="status/{{ $mp }}" class="btn btn-primary" style="width:100px;">Streams</a>
 		<a id="eventsbutton" href="events/{{ $mp }}" class="btn btn-primary" style="width:100px;">Events</a>
-		<a id="monitoringbutton" href="monitoring" class="btn btn-primary" style="width:100px;">Monitoring</a>
-		<a id="configbutton" href="config/{{ $mp }}" class="btn btn-primary" style="width:100px;">Config</a>
-		<a id="usersbutton" href="users" class="btn btn-primary" style="width:100px;">Users</a>
+		{{ if .IsAdmin }}<a id="monitoringbutton" href="monitoring" class="btn btn-primary" style="width:100px;">Monitoring</a>{{ end }}
+		{{ if .IsAdmin }}<a id="configbutton" href="config/{{ $mp }}" class="btn btn-primary" style="width:100px;">Config</a>{{ end }}
+		{{ if .IsAdmin }}<a id="usersbutton" href="users" class="btn btn-primary" style="width:100px;">Users</a>{{ end }}
 		<a id="recbutton" href="rec" class="btn btn-primary" style="width:100px;">Recordings</a>
 		&nbsp;&nbsp;&nbsp;&nbsp;
 		<div class="dropdown">
@@ -31,16 +31,16 @@
 				<li><a class="dropdown-item" href="app1.conf">App1</a></li>
 			</ul>
 		</div>
-		&nbsp;&nbsp;&nbsp;&nbsp;<a id="helpbutton" href="help" class="btn btn-primary" style="width:60px;">Help</a>
+		{{ if .IsAdmin }}&nbsp;&nbsp;&nbsp;&nbsp;<a id="helpbutton" href="help" class="btn btn-primary" style="width:60px;">Help</a>{{ end }}
 	</div>
 	<div id="playerDiv" style="float: right; margin-top: 10px; display: none; margin-left: -50px;">
 		<div class="col-sm" style="padding: 20px;">
 			<div id="currentChannel" style="text-align:center;">&nbsp;</div>
 			<div><video width="462" height="260" controls id="player"></video></div>
 			<div id="trackselection" style="display:inline-block; display: none">
-				<select id="playerAudioSelect" >
+				<select id="playerAudioSelect">
 				</select>
-				<select id="playerSubtitlesSelect" >
+				<select id="playerSubtitlesSelect">
 				</select>
 			</div>
 		</div>

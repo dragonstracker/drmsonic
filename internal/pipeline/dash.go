@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ type streamState struct {
 	rate     int
 	channels int
 	hevc     bool
+	sidx     *mp4.Sidx
 }
 
 func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
@@ -147,7 +149,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 		var vRef manifest.SegmentRef
 		haveVideo := false
 		if vSrc != nil {
-			if ref, ok := pickNext(vSrc.track, vSrc.last, live); ok {
+			if ref, ok := pickNextSrc(vSrc, live); ok {
 				vRef = ref
 				haveVideo = true
 			}
@@ -159,7 +161,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 			continue
 		}
 		if !haveVideo {
-			aRef, ok := pickNext(aSrc.track, aSrc.last, live)
+			aRef, ok := pickNextSrc(aSrc, live)
 			if !ok {
 				wait(ctx, 400*time.Millisecond)
 				continue
@@ -216,7 +218,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 			windowStart := float64(vRef.Time) / float64(vSrc.track.Timescale)
 			windowEnd := windowStart + float64(vRef.Duration)/float64(vSrc.track.Timescale)
 			for i := 0; i < 6; i++ {
-				aRef, ok := pickNext(aSrc.track, aSrc.last, live)
+				aRef, ok := pickNextSrc(aSrc, live)
 				if !ok {
 					break
 				}
@@ -345,7 +347,28 @@ func pickNext(t *manifest.Track, last int64, live bool) (manifest.SegmentRef, bo
 	if live {
 		tail = 6
 	}
-	refs := t.TailSegments(tail)
+	return pickFromRefs(t.TailSegments(tail), last, live)
+}
+
+func pickNextSrc(s *streamState, live bool) (manifest.SegmentRef, bool) {
+	if s.track.SegBase == nil {
+		return pickNext(s.track, s.last, live)
+	}
+	tail := 0
+	if live {
+		tail = 6
+	}
+	refs := s.track.RangeSegments(s.sidx, tail)
+	if len(refs) == 0 {
+		if s.sidx == nil && s.last < 0 {
+			return manifest.SegmentRef{URL: s.track.FileURL}, true
+		}
+		return manifest.SegmentRef{}, false
+	}
+	return pickFromRefs(refs, s.last, live)
+}
+
+func pickFromRefs(refs []manifest.SegmentRef, last int64, live bool) (manifest.SegmentRef, bool) {
 	if len(refs) == 0 {
 		return manifest.SegmentRef{}, false
 	}
@@ -415,12 +438,30 @@ func chooseAudioTrack(tracks []manifest.Track, want string) *manifest.Track {
 }
 
 func openStream(ctx context.Context, cl *fetch.Client, track *manifest.Track, keys *KeySet, fixIV, video bool) (*streamState, error) {
-	if track.InitURL == "" {
-		return nil, fmt.Errorf("missing init segment for representation %s", track.ID)
-	}
-	body, err := cl.Get(ctx, track.InitURL)
-	if err != nil {
-		return nil, err
+	var body []byte
+	var err error
+	var sidx *mp4.Sidx
+	if track.SegBase != nil {
+		initRange := track.InitRange
+		if initRange == "" {
+			initRange = "0-65535"
+		}
+		body, err = cl.GetRange(ctx, track.FileURL, initRange)
+		if err != nil {
+			return nil, err
+		}
+		sidx, err = loadSidx(ctx, cl, track)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if track.InitURL == "" {
+			return nil, fmt.Errorf("missing init segment for representation %s", track.ID)
+		}
+		body, err = cl.Get(ctx, track.InitURL)
+		if err != nil {
+			return nil, err
+		}
 	}
 	init, err := mp4.ParseInit(body)
 	if err != nil {
@@ -447,6 +488,7 @@ func openStream(ctx context.Context, cl *fetch.Client, track *manifest.Track, ke
 		rate:     media.Rate,
 		channels: media.Channels,
 		hevc:     strings.HasPrefix(strings.ToLower(track.Codecs), "hvc") || strings.HasPrefix(strings.ToLower(track.Codecs), "hev") || media.Codec == "hvc1",
+		sidx:     sidx,
 	}
 
 	if rate, channels := mp4.ParseAudioSpecificConfig(media.AudioConfig); rate > 0 && !video {
@@ -470,12 +512,41 @@ func openStream(ctx context.Context, cl *fetch.Client, track *manifest.Track, ke
 	return s, nil
 }
 
+func loadSidx(ctx context.Context, cl *fetch.Client, track *manifest.Track) (*mp4.Sidx, error) {
+	if track.IndexRange == "" {
+		return nil, nil
+	}
+	body, err := cl.GetRange(ctx, track.FileURL, track.IndexRange)
+	if err != nil {
+		return nil, err
+	}
+	return mp4.ParseSidx(body, rangeStart(track.IndexRange))
+}
+
+func rangeStart(s string) int64 {
+	parts := strings.SplitN(s, "-", 2)
+	if len(parts) == 0 {
+		return 0
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
 func (s *streamState) lang() string {
 	return s.track.Lang
 }
 
 func (s *streamState) fetch(ctx context.Context, cl *fetch.Client, ref manifest.SegmentRef) ([]avSample, error) {
-	body, err := cl.Get(ctx, ref.URL)
+	var body []byte
+	var err error
+	if ref.Range != "" {
+		body, err = cl.GetRange(ctx, ref.URL, ref.Range)
+	} else {
+		body, err = cl.Get(ctx, ref.URL)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -538,6 +609,7 @@ func reportTracks(cb Callbacks, m *manifest.Manifest, vSrc, aSrc *streamState) {
 			Width:     t.Width,
 			Height:    t.Height,
 			Bandwidth: t.Bandwidth,
+			Kid:       t.KID,
 		})
 	}
 	for _, t := range m.Audio {
@@ -547,6 +619,7 @@ func reportTracks(cb Callbacks, m *manifest.Manifest, vSrc, aSrc *streamState) {
 			Codecs:    t.Codecs,
 			Bandwidth: t.Bandwidth,
 			Lang:      t.Lang,
+			Kid:       t.KID,
 		})
 	}
 	if vSrc != nil {

@@ -1,23 +1,13 @@
-<!DOCTYPE html>
 <html>
 	{{template "headers.html" .}}
 	<body>
 		{{template "menu.html" .}}
-
-		{{range .Providers}}
+		{{range $p := .Providers}}
 		<div class="img-with-text">
-			<p>{{ .Name }}</p>
-			<a href="status/{{ .Id }}"><img src="{{ .Id }}.png" onerror="if (!this.src.endsWith('static/default_logo.png')) this.src = 'static/default_logo.png';" style="width:100px;"></a>
-		</div>
-		{{else}}
-		<div class="img-with-text">
-			<p>no provider configured</p>
-			<a href="config"><img src="static/default_logo.png" style="width:100px;"></a>
-			<br><br>
-			<p>Create one from the Config page.</p>
+			<p>{{$p.Name}}</p>
+			<a href="status/{{$p.Id}}"><img src="{{$p.Id}}.png" onerror="if (!this.src.endsWith('static/default_logo.png')) this.src = 'static/default_logo.png';" style="width:100px;"></a>
 		</div>
 		{{end}}
-
 		<script type="text/javascript">
 			document.getElementById('providersbutton').style.backgroundColor = 'darkblue';
 		</script>

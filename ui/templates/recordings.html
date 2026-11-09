@@ -1,106 +1,147 @@
-<!DOCTYPE html>
 <html>
 	{{template "headers.html" .}}
 	<body>
 		{{template "menu.html" .}}
-
-		<div style="margin-top: -120px; margin-left: 20px; margin-right: 20px;">
-			<div id="recActionStatus" class="mb-3"></div>
-
-			<div class="card mb-4">
-				<div class="card-header">Schedule a recording</div>
-				<div class="card-body">
-					<div class="row g-2" style="max-width: 900px;">
-						<div class="col-md-3">
-							<label class="form-label">Channel</label>
-							<select class="form-select" id="addRecChan">
-								{{range .Providers}}
-								{{ $p := .Id }}
-								{{range .Streams}}
-								<option value="{{ $p }}/{{ .Id }}">{{ $p }} / {{ .Name }}</option>
-								{{end}}
-								{{end}}
+		<div id="hiddendiv" hidden style="width: 100%; overflow:hidden; margin-top: -200px;">
+			<div style="float: left; margin-left: 20px;">
+				<form id="addRecForm">
+					<div style='width: 350px;' class="input-group mb-3">
+						<div  style="display: flex;">
+							<div class="input-group-prepend">
+								<input style='width: 135px;' type="submit" class="btn btn-outline-primary btn-sm" id="addRec" value="ADD RECORDING" />
+							</div>
+							{{ if .Providers }}
+							<select style='text-align:center; vertical-align:middle; font-weight: bold; width: 150px' id="providerSelection" >
+							{{range $n, $g := .Providers}}
+								<option value="{{$g.Id}}">{{$g.Name}}</option>
+							{{end}}
 							</select>
+							<select style='text-align:center; vertical-align:middle; font-weight: bold; width: 200px;' id="addRecChan" >
+							</select>
+							{{ end }}
 						</div>
-						<div class="col-md-2"><label class="form-label">Start date</label><input type="date" class="form-control" id="recStartDate"/></div>
-						<div class="col-md-2"><label class="form-label">Start time</label><input type="time" class="form-control" id="recStartTime"/></div>
-						<div class="col-md-2"><label class="form-label">End date</label><input type="date" class="form-control" id="recEndDate"/></div>
-						<div class="col-md-2"><label class="form-label">End time</label><input type="time" class="form-control" id="recEndTime"/></div>
-						<div class="col-md-1 d-flex align-items-end">
-							<button class="btn btn-primary w-100" id="addRecButton" onclick="dsAddRec()">ADD</button>
+						<div class="container mt-2">
+							<br>
+							<div>
+								<a>Start</a>
+								<div  style="display: flex;">
+									<input id="recStartDate" class="form-control" type="date" />
+									<input id="recStartTime" class="form-control" type="time" />
+								</div>
+								<br>
+								<a>End</a>
+								<div style="display: flex;">
+									<input id="recEndDate" class="form-control" type="date" />
+									<input id="recEndTime" class="form-control" type="time" />
+								</div>
+							</div>
 						</div>
 					</div>
+
+				</form>
+				<br>
+				<div id="recActionStatus"></div>
+				<br>
+				<div style="display: flex;">
+					<form id="recDeleteForm" ><input type="submit" class="btn btn-primary btn-sm" value="DELETE SELECTION" id="recdelete"/></form>
+					&nbsp;
+					<form id="recStopForm" ><input type="submit" class="btn btn-primary btn-sm" value="STOP SELECTION" id="recstop"/></form>
 				</div>
 			</div>
-
-			<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="recTable">
-				<thead>
-					<TR>
-						<TH style="text-align:center;">Title</TH>
-						<TH style="text-align:center;">Provider</TH>
-						<TH style="text-align:center;">Channel</TH>
-						<TH style="text-align:center;">Start</TH>
-						<TH style="text-align:center;">End</TH>
-						<TH style="text-align:center;">Status</TH>
-						<TH style="text-align:center;">Actions</TH>
-					</TR>
-				</thead>
-				<tbody>
-					{{range .Recordings}}
-					<TR>
-						<TD style="text-align:center;">{{ .Title }}</TD>
-						<TD style="text-align:center;">{{ .Provider }}</TD>
-						<TD style="text-align:center;">{{ .Channel }}</TD>
-						<TD style="text-align:center;">{{ .StartFmt }}</TD>
-						<TD style="text-align:center;">{{ .EndFmt }}</TD>
-						<TD style="text-align:center;">{{ .Status }}</TD>
-						<TD style="text-align:center;">
-							<button class="btn btn-danger btn-sm" onclick="dsRecDelete({{ .Id }})">DELETE</button>
-							<button class="btn btn-secondary btn-sm" onclick="dsRecStop({{ .Id }})">STOP</button>
-						</TD>
-					</TR>
-					{{else}}
-					<TR><TD colspan="7" style="text-align:center;">no recordings</TD></TR>
-					{{end}}
-				</tbody>
-			</table>
 		</div>
+
+		<table style="clear:both;" id="recsTable" class="table table-dark">
+			<thead>
+				<TR>
+					<TH></TH>
+					<TH>Provider</TH>
+					<TH>Channel</TH>
+					<TH>Status</TH>
+					<TH>Start time</TH>
+					<TH>End time</TH>
+				</TR>
+			</thead>
+			<tbody>
+				{{range $n, $r := .Recordings}}
+				<TR>
+					<TD>
+						<input class="form-check-input" type="checkbox" id="recchecked{{$n}}" />
+					</TD>
+					<TD>
+						<a id="recprovidername{{$n}}" >{{$r.ProviderName}}</a>
+					</TD>
+					<TD>
+						<a id="recstreamname{{$n}}" >{{$r.StreamName}}</a>
+						<input type="hidden" id="recid{{$n}}" value="{{$r.Id}}">
+						<input type="hidden" id="recstreamid{{$n}}" value="{{$r.StreamId}}">
+					</TD>
+					<TD>
+						<a id="recstatus{{$n}}">{{$r.Status}}</a>
+					</TD>
+					<TD>
+						<a id="recstart{{$n}}"></a>
+					</TD>
+					<TD>
+						<a id="recend{{$n}}"></>
+					</TD>
+				</TR>
+				{{ end }}
+
+			</tbody>
+		</table>
 
 		<script type="text/javascript">
 			document.getElementById('recbutton').style.backgroundColor = 'darkblue';
 
-			async function dsPost(body) {
-				let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(body)
-				});
-				if (!response.ok) { showStatusWindow(await response.text()); return false; }
-				return true;
-			}
+			var hls;
+			initPlayer();
 
-			async function dsAddRec() {
-				var chan = document.getElementById('addRecChan').value;
-				if (!chan) { return; }
-				var parts = chan.split('/');
-				var body = {
-					Action: 'addrec',
-					ProviderId: parts[0],
-					Streams: [ { Id: parts[1] } ],
-					Start: document.getElementById('recStartDate').value + 'T' + document.getElementById('recStartTime').value,
-					End: document.getElementById('recEndDate').value + 'T' + document.getElementById('recEndTime').value
-				};
-				if (await dsPost(body)) { location.reload(); }
-			}
+			var intervalId = null;
+			var PChangeCounter = new Object();
+			var GlobalChangeCounter = -2;
 
-			async function dsRecDelete(id) {
-				if (!confirm('Delete recording ' + id + '?')) { return; }
-				if (await dsPost({ Action: 'deleterec', Streams: [ { Id: String(id) } ] })) { location.reload(); }
+			var date = new Date();
+			var currentDate = date.toISOString().slice(0,10)
+			var mins = date.getMinutes();
+			if (mins <= 9) {
+				mins = '0' + mins
 			}
+			var currentTime = date.getHours() + ':' + mins;
 
-			async function dsRecStop(id) {
-				if (await dsPost({ Action: 'stoprec', Streams: [ { Id: String(id) } ] })) { location.reload(); }
-			}
+			document.getElementById('recStartDate').value = currentDate;
+			document.getElementById('recEndDate').value = currentDate;
+			document.getElementById('recStartTime').value = currentTime;
+			document.getElementById('recEndTime').value = currentTime;
+
+			{{range $n, $r := .Recordings}}
+
+				document.getElementById('recstreamname{{$n}}').href = '{{$r.StreamingUrl}}';
+				recstreamname{{$n}}.onclick = setPlayer;
+
+				localStart = new Date('{{$r.Start}}');
+				localEnd = new Date('{{$r.End}}');
+
+				document.getElementById('recstart{{$n}}').innerText = localStart.toLocaleString('fr-FR')
+				document.getElementById('recend{{$n}}').innerText = localEnd.toLocaleString('fr-FR')
+			{{ end }}
+
+			var table = $('#recsTable').DataTable( {"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt"});
+
+			addRecForm.onsubmit = addRecFormSubmit;
+			recDeleteForm.onsubmit = recDeleteSubmit;
+			recStopForm.onsubmit = recStopSubmit;
+			playerAudioSelect.onchange = playerAudioSelectOnchange;
+			playerSubtitlesSelect.onchange = playerSubtitlesSelectOnchange;
+			providerSelection.onchange = updateRecordingChannels
+
+			document.getElementById("hiddendiv").removeAttribute("hidden");
+
+			updateRecordings();
+			updateRecordingChannels();
+			setInterval("updateRecordings();",1000);
+
 		</script>
+
 	</body>
+
 </html>
