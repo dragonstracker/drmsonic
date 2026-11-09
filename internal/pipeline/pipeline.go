@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -156,9 +155,30 @@ func isHLSURL(u string) bool {
 }
 
 func fail(cb Callbacks, err error) error {
-	cb.Status(fmt.Sprintf("Error: %s", err.Error()))
-	cb.Error(err.Error())
+	cb.Status(ErrorStatus(err))
+	cb.Error(Describe(err))
 	return err
+}
+
+func ErrorStatus(err error) string {
+	short := Describe(err)
+	if raw := err.Error(); raw != short {
+		return "Error: " + short + "\n" + raw
+	}
+	return "Error: " + short
+}
+
+func endBroadcast(cb Callbacks) error {
+	cb.Status(ErrBroadcastEnded.Error())
+	return ErrBroadcastEnded
+}
+
+func endGrace(update time.Duration) time.Duration {
+	grace := 2 * update
+	if grace > 10*time.Second {
+		grace = 10 * time.Second
+	}
+	return grace
 }
 
 func shiftNegativeCTS(samples []avSample) {

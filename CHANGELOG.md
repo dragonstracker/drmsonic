@@ -27,6 +27,9 @@ Versions follow the release tags on GitHub.
 - Empty-password users could authenticate.
 - Admin vs panel-user capabilities were not enforced.
 - Guessable username/password playlist paths removed.
+- Panel status showed raw Go errors (`Get "https://…": dial tcp …`). Statuses now report short o11-style text (`Access denied (403)`, `Connection timeout`, `TLS handshake failed`, `Not found (404)`) with the full detail on the second line behind **show more**.
+- Finished presentations (HLS `EXT-X-ENDLIST`, exhausted DASH MPD, 404/410 manifest) looped forever as `Running`. They now end with `Broadcast ended`, stop the pipeline, and follow **Restart finished broadcast** when it is enabled.
+- HTTP 4xx manifest errors were retried as if they were transient.
 - Selector comma filters (`h<=720,codec=avc1`) AND together instead of OR.
 - SAVE USERS (`users_only`) and SAVE ALL PROVIDERS persistence.
 - User rename ignored `NewUserName` from the panel.

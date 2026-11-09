@@ -41,6 +41,15 @@ type dnsEntry struct {
 	at    time.Time
 }
 
+type StatusError struct {
+	Code int
+	URL  string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("http %d for %s", e.Code, e.URL)
+}
+
 func New(opts Options) *Client {
 	c := &Client{
 		opts:    opts,
@@ -94,6 +103,10 @@ func (c *Client) Get(ctx context.Context, rawURL string) ([]byte, error) {
 			return body, nil
 		}
 		last = err
+		var se *StatusError
+		if errors.As(err, &se) && se.Code < 500 {
+			break
+		}
 	}
 	return nil, last
 }
@@ -131,7 +144,7 @@ func (c *Client) get(ctx context.Context, rawURL, byteRange string) ([]byte, err
 
 	if resp.StatusCode >= 400 {
 		io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("http %d for %s", resp.StatusCode, rawURL)
+		return nil, &StatusError{Code: resp.StatusCode, URL: rawURL}
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

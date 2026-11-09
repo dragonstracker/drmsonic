@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"math"
 	"strings"
@@ -307,6 +309,7 @@ func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *confi
 			atomic.AddInt64(&inBytes, int64(len(seg)))
 			if ch.StatusLine != "Running" {
 				ch.StatusLine = "Running"
+				ch.LastError = ""
 			}
 		},
 		Status: func(text string) {
@@ -334,12 +337,21 @@ func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *confi
 		if ctx.Err() != nil {
 			return
 		}
+		ended := errors.Is(err, pipeline.ErrBroadcastEnded)
 		if err != nil {
-			ch.LastError = err.Error()
-			if ch.StatusLine == "" || ch.StatusLine == "Starting" || ch.StatusLine == "Running" {
-				ch.StatusLine = "Error: " + err.Error()
-			}
 			log.Printf("%s/%s: %v", prov.Id, st.Id, err)
+			if ended {
+				ch.LastError = ""
+			} else {
+				ch.LastError = pipeline.Describe(err)
+				if ch.StatusLine == "" || ch.StatusLine == "Starting" || ch.StatusLine == "Running" {
+					ch.StatusLine = pipeline.ErrorStatus(err)
+				}
+			}
+		}
+		if ended && !prov.RestartFinished {
+			ch.StatusLine = "Broadcast ended"
+			return
 		}
 		if st.NoRestartOnError || prov.NoRestartOnError {
 			return
@@ -347,6 +359,12 @@ func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *confi
 		delay := prov.RestartDelay
 		if delay <= 0 {
 			delay = 5
+		}
+		switch {
+		case ended:
+			ch.StatusLine = fmt.Sprintf("Broadcast ended (autorestart in %ds)", delay)
+		case err != nil:
+			ch.StatusLine = fmt.Sprintf("%s (autorestart in %ds)", pipeline.ErrorStatus(err), delay)
 		}
 		select {
 		case <-ctx.Done():

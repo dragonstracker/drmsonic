@@ -115,6 +115,8 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 		pending    []avSample
 		lastLoad   = time.Now()
 		lastSwitch time.Time
+		idleAt     time.Time
+		loadFails  int
 	)
 
 	if !live {
@@ -130,8 +132,10 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 
 	for ctx.Err() == nil {
 		if time.Since(lastLoad) >= update {
-			if fresh, err := loadManifest(); err == nil {
+			fresh, err := loadManifest()
+			if err == nil {
 				m = fresh
+				live = cfg.Mode != "replay" && !m.Static
 				if vSrc != nil {
 					if t := findTrack(fresh.Video, vSrc.track.ID); t != nil {
 						vSrc.track = t
@@ -143,6 +147,15 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 					}
 				}
 				lastLoad = time.Now()
+				loadFails = 0
+			} else {
+				loadFails++
+				if loadFails >= 2 {
+					if endedStatus(err) {
+						return endBroadcast(cb)
+					}
+					return fail(cb, err)
+				}
 			}
 		}
 
@@ -156,17 +169,30 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 		}
 		videoAt := time.Now()
 
-		if !haveVideo && aSrc == nil {
-			wait(ctx, 400*time.Millisecond)
-			continue
+		if haveVideo {
+			idleAt = time.Time{}
+		} else {
+			if idleAt.IsZero() {
+				idleAt = time.Now()
+			}
+			if !live && time.Since(idleAt) > endGrace(update) {
+				return endBroadcast(cb)
+			}
 		}
+
 		if !haveVideo {
 			if vSrc != nil {
+				if live && time.Since(idleAt) > 15*time.Second {
+					cb.Status("Waiting for segments")
+				}
 				wait(ctx, 100*time.Millisecond)
 				continue
 			}
 			aRef, ok := pickNextSrc(aSrc, live)
 			if !ok {
+				if live && time.Since(idleAt) > 15*time.Second {
+					cb.Status("Waiting for segments")
+				}
 				wait(ctx, 400*time.Millisecond)
 				continue
 			}
@@ -175,7 +201,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 				if errors.Is(err, ErrMissingKey) {
 					return fail(cb, err)
 				}
-				cb.Error(err.Error())
+				cb.Error(Describe(err))
 				wait(ctx, time.Second)
 				continue
 			}
@@ -198,7 +224,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 			if errors.Is(err, ErrMissingKey) {
 				return fail(cb, err)
 			}
-			cb.Error(err.Error())
+			cb.Error(Describe(err))
 			wait(ctx, time.Second)
 			continue
 		}
@@ -233,7 +259,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 				}
 				samples, err := aSrc.fetch(ctx, cl, aRef)
 				if err != nil {
-					cb.Error(err.Error())
+					cb.Error(Describe(err))
 					break
 				}
 				aSrc.last = aRef.Time
