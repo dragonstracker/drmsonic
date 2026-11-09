@@ -99,14 +99,8 @@
 
 			addUserForm.onsubmit = addUserFormSubmit;
 			saveusers.onclick = saveUsersClick;
-			noauth.onchange = touchUsersForm;
 
 			{{range $n, $c := .Users}}
-				passwordDiv{{$n}}.onchange = touchUsersForm;
-				networkDiv{{$n}}.onchange = touchUsersForm;
-				userProviders{{$n}}.onchange = touchUsersForm;
-				isadminDiv{{$n}}.onchange = touchUsersForm;
-				haswebaccessDiv{{$n}}.onchange = touchUsersForm;
 				deleteuser{{$n}}.onclick = deleteUserClick;
 				renameuser{{$n}}.onclick = renameUserClick;
 			{{end}}

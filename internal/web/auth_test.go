@@ -187,22 +187,6 @@ func TestUpdateUserKeepsPassword(t *testing.T) {
 	}
 }
 
-func TestSaveUsersOnly(t *testing.T) {
-	tok := config.NewStreamToken()
-	users := []config.User{{Username: "bob", Password: "x", StreamToken: tok, HasWebAccess: true, IsAdmin: true}}
-	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, users, sampleProvider("channels"))
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/action", strings.NewReader(`{"Action":"save","ProviderId":"users_only"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", "http://example.test")
-	req.Host = "example.test"
-	req.SetBasicAuth("admin", "secret")
-	s.Handler().ServeHTTP(rr, req)
-	if rr.Code != 200 {
-		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
-	}
-}
-
 func TestSaveUsersAction(t *testing.T) {
 	tok := config.NewStreamToken()
 	users := []config.User{{Username: "bob", Password: "old", StreamToken: tok, HasWebAccess: true, IsAdmin: true, ProviderIds: []string{"channels"}}}

@@ -123,18 +123,24 @@ docker compose logs -f
 
 ### Fresh VPS, one command
 
-Every `v*` git tag publishes Linux amd64/arm64 + Windows binaries into GitHub Releases. Install on a clean VPS:
+Every `v*` git tag publishes Linux amd64/arm64 + Windows binaries into GitHub Releases. Every `devloper` push publishes the rolling prerelease tag `dev`. Install on a clean VPS:
 
 ```sh
-curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo bash
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/download/dev/install.sh | sudo bash
 ```
 
-That downloads the matching binary into `/home/drmsonic`, writes a systemd unit, opens port `7779`, and starts the service. Run the same command again anytime to **upgrade** in place: it stops the service, replaces the binary, keeps `providers/`, rewrites the unit, and restarts.
+That downloads the binary into `/home/drmsonic`, writes a systemd unit, opens port `7779`, and starts the service. Run the same command again anytime to **upgrade** in place: it stops the service, replaces the binary, keeps `providers/`, rewrites the unit, and restarts. The panel footer must read `drmsonic dev-<sha>`; `v1.1.x` means a production `latest` installer was used.
+
+For a production build instead:
+
+```sh
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo DRMSONIC_TAG=latest bash
+```
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `DRMSONIC_REPO` | `dragonstracker/drmsonic` | GitHub owner/repo |
-| `DRMSONIC_TAG` | `latest` | release tag (`v1.1.0`) or `latest` |
+| `DRMSONIC_TAG` | `dev` | release tag (`dev`, `latest`, or `v1.1.3`) |
 | `DRMSONIC_DIR` | `/home/drmsonic` | install path |
 | `DRMSONIC_PORT` | `7779` | HTTP port |
 | `DRMSONIC_BIND` | `0.0.0.0` | bind address |
@@ -201,7 +207,7 @@ Token paths `/t/<stream-token>/…` still work for fetch. Failed logins are rate
 Production (`main` tags → latest):
 
 ```sh
-curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo bash
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo DRMSONIC_TAG=latest bash
 ```
 
 Developer branch (rolling prerelease tag `dev`, updated on every `devloper` push):

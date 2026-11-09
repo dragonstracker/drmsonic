@@ -278,17 +278,6 @@ func (s *Server) acGetMonitoring(w http.ResponseWriter, req actionRequest) {
 }
 
 func (s *Server) acSave(w http.ResponseWriter, req actionRequest) {
-	if req.ProviderId == "users_only" {
-		if v, ok := req.Raw["NoAuth"]; ok {
-			s.store.SetNoAuth(boolOf(v))
-		}
-		if err := s.store.SaveUsers(); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		s.renderJSON(w, "ok")
-		return
-	}
 	if req.ProviderId == "" {
 		for _, p := range s.store.Providers() {
 			if err := s.store.Put(p); err != nil {

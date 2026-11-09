@@ -428,16 +428,6 @@ async function massupdateClick(e) {
 	}
 }
 
-function touchUsersForm(e) {
-	if (e) {
-		e.preventDefault();
-	}
-	var btn = document.getElementById('saveusers');
-	if (btn) {
-		btn.removeAttribute('disabled');
-	}
-}
-
 function collectUsersFromForm() {
 	var users = [];
 	var n = 0;

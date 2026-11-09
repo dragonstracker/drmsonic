@@ -42,7 +42,8 @@ Versions follow the release tags on GitHub.
 - **All qualities** remuxes each video track into an ABR master (`v/<id>/stream.m3u8`).
 
 ### Changed
-- SAVE USERS is a single `saveusers` action (all rows + NoAuth in one write).
+- SAVE USERS is a single `saveusers` action (all rows + NoAuth in one write); `users_only` path removed.
+- Installer defaults to the `dev` release; `DRMSONIC_TAG=latest|vX.Y.Z` pins another build.
 - Session cookie satisfies CSRF for panel API posts (SAVE USERS works while logged in).
 - app1.conf / playlists emit `/{user}/{pass}/stream/...` URLs when the user has a password.
 - Dev releases pin `target_commitish` to the push SHA so tag `dev` tracks `devloper`.
