@@ -58,6 +58,7 @@ type Page struct {
 	LoggedIn   bool
 
 	Providers       []*config.Provider
+	StreamTables    []*config.Provider
 	Provider        *config.Provider
 	ProviderId      string
 	Streams         []config.Stream

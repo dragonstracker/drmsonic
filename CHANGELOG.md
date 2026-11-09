@@ -42,6 +42,8 @@ Versions follow the release tags on GitHub.
 - Config / Channels rows grew from 55px to 170px once their editors arrived, shifting the page while it filled; the row height is reserved up front.
 - The first channel build waited for the status poll before requesting config; the config request now starts in parallel.
 - Bundling the CSS turned every panel page white: `drmsonic.css` begins with a UTF-8 BOM, and inside a bundle that byte swallowed the `body { background: black }` rule. Leading BOMs are stripped when assets are read, and the file itself no longer carries one.
+- Streams and Events ignored the provider in the URL: every page rendered one table per configured provider, so `/status/example` listed all 45 streams of both providers under a 45-stream total. Only the selected provider renders now; **All Running** still spans every provider, and the provider picker keeps listing all of them.
+- Filter changes threw on pages where no provider was preselected, because the filter and delete handlers read a provider from an unselected dropdown; they now fall back to the provider in the URL.
 
 ### Added
 - Default `admin` / `admin` on first install when no passwords exist (changeable under Users).

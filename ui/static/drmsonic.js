@@ -3142,36 +3142,26 @@ function hideLoading(loader) {
 	loader.classList.remove("display");
 }
 
-function filterOnChange() {
-	if (document.URL.includes("/config")) {
-		page = "config"
-	} else {
-		page = "status"
-	}
+function selectedPage() {
+	return document.URL.includes("/config") ? "config" : "status"
+}
 
-	filter = document.getElementById('filterselection').options[document.getElementById('filterselection').selectedIndex].value;
-	if (document.getElementById('providerSelection').selectedIndex >= 0 ) {
-		window.location.href = "/" + page + "/" + document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value + "?filter=" + filter;
-	} else {
-		window.location.href = "/" + page + "/" + document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value; 
+function selectedProvider() {
+	var sel = document.getElementById('providerSelection');
+	if (sel && sel.selectedIndex >= 0) {
+		return sel.options[sel.selectedIndex].value
 	}
+	return window.location.pathname.split('/')[2] || "";
+}
+
+function filterOnChange() {
+	filter = document.getElementById('filterselection').options[document.getElementById('filterselection').selectedIndex].value;
+	window.location.href = "/" + selectedPage() + "/" + selectedProvider() + "?filter=" + filter;
 }
 
 async function filterDeleteOnClick(e) {
 	e.preventDefault();
-
-	if (document.URL.includes("/config")) {
-		page = "config"
-	} else {
-		page = "status"
-	}
-
-	if (document.getElementById('providerSelection').selectedIndex >= 0 ) {
-		window.location.href = "/" + page + "/" +  document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value;
-	} else {
-		window.location.href = "/" + page + "/";
-	}
-
+	window.location.href = "/" + selectedPage() + "/" + selectedProvider();
 }
 
 function showErrorLogWindow(e, id) {

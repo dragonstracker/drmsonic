@@ -45,6 +45,15 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	p.Provider = prov
 	p.ProviderId = prov.Id
 	p.Streams = prov.Streams
+	p.StreamsCount = len(prov.Streams)
+	p.StreamTables = []*config.Provider{prov}
+	if r.URL.Query().Get("filter") == "allrunning" {
+		p.StreamTables = p.Providers
+		p.StreamsCount = 0
+		for _, other := range p.Providers {
+			p.StreamsCount += len(other.Streams)
+		}
+	}
 	s.render(w, "streams.html", p)
 }
 
