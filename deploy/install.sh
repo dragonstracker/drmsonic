@@ -27,19 +27,32 @@ else
 	URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 fi
 
-log "installing into $INSTALL_DIR"
+UPGRADE=0
+if [ -x "${INSTALL_DIR}/${BIN_NAME}" ] || systemctl cat "${SERVICE}.service" >/dev/null 2>&1; then
+	UPGRADE=1
+fi
+
+if [ "$UPGRADE" -eq 1 ]; then
+	log "upgrade — stopping ${SERVICE}"
+	systemctl stop "${SERVICE}.service" 2>/dev/null || true
+else
+	log "fresh install into ${INSTALL_DIR}"
+fi
+
 mkdir -p "$INSTALL_DIR/providers" "$INSTALL_DIR/scripts" "$INSTALL_DIR/logos"
 cd "$INSTALL_DIR"
 
+TMP="${BIN_NAME}.new"
 log "downloading $URL"
 if command -v curl >/dev/null 2>&1; then
-	curl -fL --retry 3 -o "$BIN_NAME" "$URL"
+	curl -fL --retry 3 -o "$TMP" "$URL"
 elif command -v wget >/dev/null 2>&1; then
-	wget -O "$BIN_NAME" "$URL"
+	wget -O "$TMP" "$URL"
 else
 	die "need curl or wget"
 fi
-chmod +x "$BIN_NAME"
+chmod +x "$TMP"
+mv -f "$TMP" "$BIN_NAME"
 
 if [ ! -f providers/example.json ]; then
 	cat >providers/example.json <<'JSON'
@@ -81,13 +94,18 @@ UNIT
 
 systemctl daemon-reload
 systemctl enable --now "${SERVICE}.service"
+systemctl restart "${SERVICE}.service"
 
 if command -v ufw >/dev/null 2>&1; then
 	ufw allow "${PORT}/tcp" >/dev/null 2>&1 || true
 fi
 
 PUBLIC_IP="$(curl -fsS --max-time 4 https://api.ipify.org 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')"
-log "running"
+if [ "$UPGRADE" -eq 1 ]; then
+	log "upgraded"
+else
+	log "installed"
+fi
 log "panel: http://${PUBLIC_IP:-<server-ip>}:${PORT}"
 log "status: systemctl status ${SERVICE} --no-pager"
 log "logs:   journalctl -u ${SERVICE} -f"

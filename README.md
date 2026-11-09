@@ -127,7 +127,7 @@ Every `v*` git tag publishes Linux amd64/arm64 + Windows binaries into GitHub Re
 curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo bash
 ```
 
-That downloads the matching binary into `/home/drmsonic`, writes a systemd unit, opens port `7779`, and starts the service. Same shape as the o11 one-liner, without cloning source or installing a compiler.
+That downloads the matching binary into `/home/drmsonic`, writes a systemd unit, opens port `7779`, and starts the service. Same shape as the o11 one-liner, without cloning source or installing a compiler. Run the same command again anytime to **upgrade** in place: it stops the service, replaces the binary, keeps `providers/`, rewrites the unit, and restarts.
 
 | Variable | Default | Purpose |
 |---|---|---|
