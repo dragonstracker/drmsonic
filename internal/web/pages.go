@@ -147,12 +147,13 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleApp1(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	host := strings.TrimPrefix(strings.TrimPrefix(s.baseFor(r), "http://"), "https://")
 	var b strings.Builder
 	for _, p := range s.store.Providers() {
 		for i := range p.Streams {
 			st := &p.Streams[i]
 			fmt.Fprintf(&b, "stream %s_%s {\n", p.Id, st.Id)
-			fmt.Fprintf(&b, "\turl hls://%s/stream/%s/%s/master.m3u8;\n", strings.TrimPrefix(strings.TrimPrefix(s.opts.BaseURL, "http://"), "https://"), p.Id, st.Id)
+			fmt.Fprintf(&b, "\turl hls://%s/stream/%s/%s/master.m3u8;\n", host, p.Id, st.Id)
 			fmt.Fprintf(&b, "\ttitle \"[%s] %s\";\n", p.Id, st.Name)
 			fmt.Fprintf(&b, "}\n\n")
 		}
