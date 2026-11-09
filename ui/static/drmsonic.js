@@ -428,46 +428,55 @@ async function massupdateClick(e) {
 	}
 }
 
-async function updateUser(e) {
+function touchUsersForm(e) {
+	if (e) {
+		e.preventDefault();
+	}
+	var btn = document.getElementById('saveusers');
+	if (btn) {
+		btn.removeAttribute('disabled');
+	}
+}
+
+function collectUsersFromForm() {
+	var users = [];
+	var n = 0;
+	while (document.getElementById('username' + n)) {
+		var picked = $('#userProviders' + n).val();
+		users.push({
+			Username: document.getElementById('username' + n).innerText.trim(),
+			Password: $('#password' + n).val(),
+			Network: $('#network' + n).val(),
+			IsAdmin: document.getElementById('isadmin' + n).checked,
+			HasWebAccess: document.getElementById('haswebaccess' + n).checked,
+			ProviderIds: picked ? picked : []
+		});
+		n++;
+	}
+	return users;
+}
+
+async function saveUsersClick(e) {
 	e.preventDefault();
-
-	n = this.id.replace(/\D/g, "")
-
-	var userProviders = [];
-	$('#userProviders' + n).val().forEach(function(id) {
-		userProviders.push(id)
-	});
-
-	data = {
-		Action : 'updateuser',
-		Users : [
-			{
-				Username : document.getElementById('username' + n).innerText,
-				Password : $('#password' + n).val(),
-				Network : $('#network' + n).val(),
-				IsAdmin: document.getElementById('isadmin' + n).checked,
-				HasWebAccess: document.getElementById('haswebaccess' + n).checked,
-				ProviderIds: userProviders
-			},
-		]
-	}
-
-	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
-		headers: {
-			'Content-Type': 'application/json',
-		},
+	var noauthEl = document.getElementById('noauth');
+	var data = {
+		Action: 'saveusers',
+		NoAuth: !!(noauthEl && noauthEl.checked),
+		Users: collectUsersFromForm()
+	};
+	let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		credentials: 'same-origin',
 		body: JSON.stringify(data),
-	})
-
+	});
 	if (!response.ok) {
-		text = await response.text();
-		showStatusWindow(text);
-		return
+		showStatusWindow(await response.text());
+		return;
 	}
-
-	document.getElementById('saveusers').removeAttribute("disabled");
-};
+	showStatusWindow('Users saved');
+	location.reload();
+}
 
 
 async function updateGlobal(e) {
@@ -638,50 +647,11 @@ async function shutdownClick(e) {
 	}
 };
 
-async function flushUsersFromForm() {
-	var n = 0;
-	while (document.getElementById('username' + n)) {
-		var userProviders = [];
-		var picked = $('#userProviders' + n).val();
-		if (picked) {
-			picked.forEach(function(id) { userProviders.push(id); });
-		}
-		var data = {
-			Action: 'updateuser',
-			Users: [{
-				Username: document.getElementById('username' + n).innerText,
-				Password: $('#password' + n).val(),
-				Network: $('#network' + n).val(),
-				IsAdmin: document.getElementById('isadmin' + n).checked,
-				HasWebAccess: document.getElementById('haswebaccess' + n).checked,
-				ProviderIds: userProviders
-			}]
-		};
-		let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			credentials: 'same-origin',
-			body: JSON.stringify(data),
-		});
-		if (!response.ok) {
-			showStatusWindow(await response.text());
-			return false;
-		}
-		n++;
-	}
-	return true;
-}
-
 async function saveClick(e) {
 	e.preventDefault();
 
 	if (this.id == 'saveall') {
 		providerId = ""
-	} else if (this.id == 'saveusers') {
-		if (!(await flushUsersFromForm())) {
-			return;
-		}
-		providerId = "users_only"
 	} else {
 		providerId = document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value
 	}
@@ -690,12 +660,6 @@ async function saveClick(e) {
 		Action : "save",
 		ProviderId : providerId
 	};
-	if (this.id == 'saveusers') {
-		var noauthEl = document.getElementById('noauth');
-		if (noauthEl) {
-			data.NoAuth = noauthEl.checked;
-		}
-	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
 		method: 'POST',
@@ -712,9 +676,6 @@ async function saveClick(e) {
 	} else {
 		if (this.id == 'saveall') {
 			document.getElementById('saveall').setAttribute("disabled","disabled");
-		} else if (this.id == 'saveusers') {
-			showStatusWindow('Users saved');
-			location.reload();
 		} else {
 			document.getElementById('saveprovider').setAttribute("disabled","disabled");
 		}
@@ -1265,10 +1226,11 @@ async function addUserFormSubmit(e) {
 	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
+		credentials: 'same-origin',
 		body: JSON.stringify(data),
 	})
 
@@ -1451,10 +1413,11 @@ async function deleteUserClick(e) {
 	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
+		credentials: 'same-origin',
 		body: JSON.stringify(data),
 	})
 
@@ -1471,7 +1434,6 @@ async function renameUserClick(e) {
 	e.preventDefault();
 	n = this.id.replace("renameuser", "")
 
-	let text;
 	let newName = prompt("Please enter new user name");
 	if (newName == null || newName == "") {
 		return;
@@ -1488,18 +1450,18 @@ async function renameUserClick(e) {
 	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
+		credentials: 'same-origin',
 		body: JSON.stringify(data),
 	})
 
 	if (!response.ok) {
-		text = await response.text();
-		showStatusWindow(text);
+		showStatusWindow(await response.text());
 	} else {
-		 document.getElementById('username' + n).innerText = newName;
+		document.getElementById('username' + n).innerText = newName;
 	}
 };
 

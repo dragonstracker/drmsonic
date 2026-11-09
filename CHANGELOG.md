@@ -42,12 +42,16 @@ Versions follow the release tags on GitHub.
 - **All qualities** remuxes each video track into an ABR master (`v/<id>/stream.m3u8`).
 
 ### Changed
-- SAVE USERS flushes every row from the form before persisting (password no longer lost if the field was not blurred).
+- SAVE USERS is a single `saveusers` action (all rows + NoAuth in one write).
 - Session cookie satisfies CSRF for panel API posts (SAVE USERS works while logged in).
 - app1.conf / playlists emit `/{user}/{pass}/stream/...` URLs when the user has a password.
 - Dev releases pin `target_commitish` to the push SHA so tag `dev` tracks `devloper`.
 - Config page first-load race fixed (provider select before DataTable / serialized `updateStreams`).
 - All-qualities master only advertises variants that already have segments; remux starts are staggered.
+
+### Fixed
+- Users password / providers / NoAuth save crashed when the providers select returned null.
+- Open panel without login never persisted when an earlier per-row update failed.
 
 ## [1.1.3] — 2026-11-09
 

@@ -203,6 +203,40 @@ func TestSaveUsersOnly(t *testing.T) {
 	}
 }
 
+func TestSaveUsersAction(t *testing.T) {
+	tok := config.NewStreamToken()
+	users := []config.User{{Username: "bob", Password: "old", StreamToken: tok, HasWebAccess: true, IsAdmin: true, ProviderIds: []string{"channels"}}}
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, users, sampleProvider("channels"))
+	body := `{"Action":"saveusers","NoAuth":true,"Users":[{"Username":"bob","Password":"newpass","Network":"10.0.0.0/8","IsAdmin":true,"HasWebAccess":true,"ProviderIds":["channels"]}]}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/action", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://example.test")
+	req.Host = "example.test"
+	req.SetBasicAuth("admin", "secret")
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != 200 {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	got := s.store.Users()
+	if len(got) != 1 || got[0].Password != "newpass" || got[0].Network != "10.0.0.0/8" {
+		t.Fatalf("users: %+v", got)
+	}
+	if !s.store.NoAuth() {
+		t.Fatal("NoAuth not set")
+	}
+	if err := s.store.Load(); err != nil {
+		t.Fatal(err)
+	}
+	if !s.store.NoAuth() {
+		t.Fatal("NoAuth lost after reload")
+	}
+	got = s.store.Users()
+	if len(got) != 1 || got[0].Password != "newpass" {
+		t.Fatalf("password lost after reload: %+v", got)
+	}
+}
+
 func TestRenameUserNewUserName(t *testing.T) {
 	tok := config.NewStreamToken()
 	users := []config.User{{Username: "bob", Password: "x", StreamToken: tok, HasWebAccess: true, IsAdmin: true}}

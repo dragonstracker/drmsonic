@@ -98,18 +98,15 @@
 			document.getElementById('usersbutton').style.backgroundColor = 'darkblue';
 
 			addUserForm.onsubmit = addUserFormSubmit;
-			saveusers.onclick = saveClick;
-
-			var intervalId = null;
-			var PChangeCounter = new Object();
-			var GlobalChangeCounter = -2;
+			saveusers.onclick = saveUsersClick;
+			noauth.onchange = touchUsersForm;
 
 			{{range $n, $c := .Users}}
-				passwordDiv{{$n}}.onchange = updateUser;
-				networkDiv{{$n}}.onchange = updateUser;
-				userProviders{{$n}}.onchange = updateUser;
-				isadminDiv{{$n}}.onchange = updateUser;
-				haswebaccessDiv{{$n}}.onchange = updateUser;
+				passwordDiv{{$n}}.onchange = touchUsersForm;
+				networkDiv{{$n}}.onchange = touchUsersForm;
+				userProviders{{$n}}.onchange = touchUsersForm;
+				isadminDiv{{$n}}.onchange = touchUsersForm;
+				haswebaccessDiv{{$n}}.onchange = touchUsersForm;
 				deleteuser{{$n}}.onclick = deleteUserClick;
 				renameuser{{$n}}.onclick = renameUserClick;
 			{{end}}
