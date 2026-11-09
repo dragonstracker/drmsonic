@@ -17,6 +17,7 @@ type Store struct {
 	dir       string
 	providers map[string]*Provider
 	users     []User
+	noAuth    bool
 	confPath  string
 	order     []string
 }
@@ -110,6 +111,7 @@ func (s *Store) Load() error {
 			var c Config
 			if json.Unmarshal(raw, &c) == nil {
 				s.users, _ = EnsureUserTokens(c.Users)
+				s.noAuth = c.NoAuth
 			}
 		}
 	}
@@ -188,6 +190,29 @@ func (s *Store) Users() []User {
 	return out
 }
 
+func (s *Store) NoAuth() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.noAuth
+}
+
+func (s *Store) SetNoAuth(v bool) {
+	s.mu.Lock()
+	s.noAuth = v
+	s.mu.Unlock()
+}
+
+func (s *Store) UserByName(name string) (User, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, u := range s.users {
+		if u.Username == name {
+			return u, true
+		}
+	}
+	return User{}, false
+}
+
 func (s *Store) SetUsers(u []User) {
 	s.mu.Lock()
 	users, _ := EnsureUserTokens(u)
@@ -263,7 +288,7 @@ func (s *Store) writeProviderLocked(p *Provider) error {
 
 func (s *Store) SaveUsers() error {
 	s.mu.RLock()
-	raw, err := json.MarshalIndent(Config{Users: s.users}, "", "\t")
+	raw, err := json.MarshalIndent(Config{Users: s.users, NoAuth: s.noAuth}, "", "\t")
 	s.mu.RUnlock()
 	if err != nil {
 		return err

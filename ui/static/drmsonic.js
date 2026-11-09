@@ -690,6 +690,12 @@ async function saveClick(e) {
 		Action : "save",
 		ProviderId : providerId
 	};
+	if (this.id == 'saveusers') {
+		var noauthEl = document.getElementById('noauth');
+		if (noauthEl) {
+			data.NoAuth = noauthEl.checked;
+		}
+	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
 		method: 'POST',
@@ -707,7 +713,7 @@ async function saveClick(e) {
 		if (this.id == 'saveall') {
 			document.getElementById('saveall').setAttribute("disabled","disabled");
 		} else if (this.id == 'saveusers') {
-			document.getElementById('saveusers').setAttribute("disabled","disabled");
+			showStatusWindow('Users saved');
 			location.reload();
 		} else {
 			document.getElementById('saveprovider').setAttribute("disabled","disabled");

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -33,17 +34,20 @@ func newMediaStore() *mediaStore {
 	}
 }
 
-func mediaKey(p, s string) string {
-	return p + "/" + s
+func mediaKey(p, s, rend string) string {
+	if rend == "" {
+		return p + "/" + s
+	}
+	return p + "/" + s + "/v/" + rend
 }
 
-func (m *mediaStore) push(p, s string, data []byte, dur float64, window int) Segment {
+func (m *mediaStore) push(p, s, rend string, data []byte, dur float64, window int) Segment {
 	if window < 2 {
 		window = 2
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	k := mediaKey(p, s)
+	k := mediaKey(p, s, rend)
 	b, ok := m.bufs[k]
 	if !ok {
 		b = &SegBuffer{Target: 2}
@@ -52,6 +56,7 @@ func (m *mediaStore) push(p, s string, data []byte, dur float64, window int) Seg
 	if _, seen := m.access[k]; !seen {
 		m.access[k] = time.Now()
 	}
+	m.access[mediaKey(p, s, "")] = time.Now()
 	seq := b.Seq
 	seg := Segment{Seq: seq, Name: segmentName(seq), Duration: dur, Data: data}
 	b.Items = append(b.Items, seg)
@@ -62,21 +67,21 @@ func (m *mediaStore) push(p, s string, data []byte, dur float64, window int) Seg
 	return seg
 }
 
-func (m *mediaStore) setTarget(p, s string, target int) {
+func (m *mediaStore) setTarget(p, s, rend string, target int) {
 	if target < 1 {
 		target = 1
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if b, ok := m.bufs[mediaKey(p, s)]; ok {
+	if b, ok := m.bufs[mediaKey(p, s, rend)]; ok {
 		b.Target = target
 	}
 }
 
-func (m *mediaStore) find(p, s, name string) ([]byte, bool) {
+func (m *mediaStore) find(p, s, rend, name string) ([]byte, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	b, ok := m.bufs[mediaKey(p, s)]
+	b, ok := m.bufs[mediaKey(p, s, rend)]
 	if !ok {
 		return nil, false
 	}
@@ -88,10 +93,10 @@ func (m *mediaStore) find(p, s, name string) ([]byte, bool) {
 	return nil, false
 }
 
-func (m *mediaStore) snapshot(p, s string) SegBuffer {
+func (m *mediaStore) snapshot(p, s, rend string) SegBuffer {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	b, ok := m.bufs[mediaKey(p, s)]
+	b, ok := m.bufs[mediaKey(p, s, rend)]
 	if !ok {
 		return SegBuffer{Target: 2}
 	}
@@ -101,16 +106,18 @@ func (m *mediaStore) snapshot(p, s string) SegBuffer {
 	return out
 }
 
-func (m *mediaStore) touch(p, s string) {
+func (m *mediaStore) touch(p, s, rend string) {
 	m.mu.Lock()
-	m.access[mediaKey(p, s)] = time.Now()
+	now := time.Now()
+	m.access[mediaKey(p, s, rend)] = now
+	m.access[mediaKey(p, s, "")] = now
 	m.mu.Unlock()
 }
 
 func (m *mediaStore) idle(p, s string) time.Duration {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	at, ok := m.access[mediaKey(p, s)]
+	at, ok := m.access[mediaKey(p, s, "")]
 	if !ok {
 		return 0
 	}
@@ -120,9 +127,13 @@ func (m *mediaStore) idle(p, s string) time.Duration {
 func (m *mediaStore) drop(p, s string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	k := mediaKey(p, s)
-	delete(m.bufs, k)
-	delete(m.access, k)
+	prefix := p + "/" + s
+	for k := range m.bufs {
+		if k == prefix || strings.HasPrefix(k, prefix+"/") {
+			delete(m.bufs, k)
+			delete(m.access, k)
+		}
+	}
 }
 
 func segmentName(seq uint64) string {
@@ -144,12 +155,12 @@ func pad(v uint64) string {
 	return string(digits)
 }
 
-func (s *Server) segments(prov *config.Provider, st *config.Stream) SegBuffer {
-	return s.media.snapshot(prov.Id, st.Id)
+func (s *Server) segments(prov *config.Provider, st *config.Stream, rend string) SegBuffer {
+	return s.media.snapshot(prov.Id, st.Id, rend)
 }
 
-func (s *Server) segmentData(prov *config.Provider, st *config.Stream, name string) ([]byte, bool) {
-	return s.media.find(prov.Id, st.Id, name)
+func (s *Server) segmentData(prov *config.Provider, st *config.Stream, rend, name string) ([]byte, bool) {
+	return s.media.find(prov.Id, st.Id, rend, name)
 }
 
 func windowFor(prov *config.Provider, st *config.Stream) int {

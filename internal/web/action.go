@@ -63,7 +63,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unsupported media type", http.StatusUnsupportedMediaType)
 		return
 	}
-	if s.authEnabled() && !sameOrigin(r) && r.Header.Get("Authorization") == "" && r.Header.Get("X-Drmsonic-Token") == "" {
+	if !s.csrfOK(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -277,6 +277,9 @@ func (s *Server) acGetMonitoring(w http.ResponseWriter, req actionRequest) {
 
 func (s *Server) acSave(w http.ResponseWriter, req actionRequest) {
 	if req.ProviderId == "users_only" {
+		if v, ok := req.Raw["NoAuth"]; ok {
+			s.store.SetNoAuth(boolOf(v))
+		}
 		if err := s.store.SaveUsers(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

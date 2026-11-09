@@ -37,9 +37,14 @@ Versions follow the release tags on GitHub.
 - Video track option **All qualities** alongside Best and per-rendition ids.
 - Install prints binary version, verifies `dev-*` when `DRMSONIC_TAG=dev`, seeds admin on fresh installs.
 - `dev` release `install.sh` defaults `DRMSONIC_TAG` to `dev` (avoids accidental `latest` / v1.1.x installs).
+- Playlist path `/{username}/{password}/…` (app1.conf / m3u / streams) for IPTV clients.
+- **Open panel without login** toggle on Users (`NoAuth`).
+- **All qualities** remuxes each video track into an ABR master (`v/<id>/stream.m3u8`).
 
 ### Changed
 - SAVE USERS flushes every row from the form before persisting (password no longer lost if the field was not blurred).
+- Session cookie satisfies CSRF for panel API posts (SAVE USERS works while logged in).
+- app1.conf / playlists emit `/{user}/{pass}/stream/...` URLs when the user has a password.
 - Dev releases pin `target_commitish` to the push SHA so tag `dev` tracks `devloper`.
 
 ## [1.1.3] — 2026-11-09

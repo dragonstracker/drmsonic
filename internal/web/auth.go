@@ -28,6 +28,9 @@ func userFrom(ctx context.Context) (config.User, bool) {
 }
 
 func (s *Server) authEnabled() bool {
+	if s.store.NoAuth() {
+		return false
+	}
 	if s.opts.User != "" && s.opts.Password != "" {
 		return true
 	}
@@ -85,6 +88,9 @@ func (s *Server) resolveUser(r *http.Request) (config.User, bool) {
 	}
 	if tok, ok := pathToken(r); ok {
 		return s.userFromStreamToken(tok, ip)
+	}
+	if u, p, ok := pathUserPass(r); ok {
+		return s.authenticate(u, p, ip)
 	}
 	if c, err := r.Cookie(sessionCookie); err == nil {
 		if name, ok := s.sessions.get(c.Value); ok {
@@ -259,6 +265,36 @@ func pathToken(r *http.Request) (string, bool) {
 	return "", false
 }
 
+func pathUserPass(r *http.Request) (string, string, bool) {
+	u := r.Header.Get("X-Drmsonic-User")
+	p := r.Header.Get("X-Drmsonic-Pass")
+	if u != "" && p != "" {
+		return u, p, true
+	}
+	return "", "", false
+}
+
+var reservedPathHeads = map[string]bool{
+	"static": true, "api": true, "login": true, "logout": true,
+	"providers": true, "status": true, "events": true, "config": true,
+	"users": true, "rec": true, "records": true, "monitoring": true,
+	"help": true, "debug": true, "stream": true, "t": true,
+	"playlist.m3u": true, "live.m3u": true, "event.m3u": true, "replay.m3u": true,
+	"app1.conf": true,
+}
+
+func isUserPassPath(parts []string) bool {
+	if len(parts) < 3 || reservedPathHeads[parts[0]] {
+		return false
+	}
+	switch parts[2] {
+	case "stream", "app1.conf", "playlist.m3u", "live.m3u", "event.m3u", "replay.m3u":
+		return true
+	default:
+		return false
+	}
+}
+
 func clientIP(r *http.Request, trustedProxies string) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -316,8 +352,43 @@ func (s *Server) pathAuthRewrite(next http.Handler) http.Handler {
 				return
 			}
 		}
+		if isUserPassPath(parts) {
+			user, err1 := url.PathUnescape(parts[0])
+			pass, err2 := url.PathUnescape(parts[1])
+			if err1 == nil && err2 == nil && user != "" && pass != "" {
+				rest := "/" + strings.Join(parts[2:], "/")
+				r2 := r.Clone(r.Context())
+				r2.URL.Path = rest
+				r2.Header.Set("X-Drmsonic-User", user)
+				r2.Header.Set("X-Drmsonic-Pass", pass)
+				next.ServeHTTP(w, r2)
+				return
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) csrfOK(r *http.Request) bool {
+	if !s.authEnabled() || sameOrigin(r) {
+		return true
+	}
+	if r.Header.Get("Authorization") != "" || r.Header.Get("X-Drmsonic-Token") != "" {
+		return true
+	}
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		if _, ok := s.sessions.get(c.Value); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func userPassPrefix(user, pass string) string {
+	if user == "" || pass == "" {
+		return ""
+	}
+	return "/" + url.PathEscape(user) + "/" + url.PathEscape(pass)
 }
 
 func splitPath(p string) []string {

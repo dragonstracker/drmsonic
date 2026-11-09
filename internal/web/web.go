@@ -66,6 +66,7 @@ type Page struct {
 	InternalUdpOnly bool
 	Status          state.StatusResponse
 	Users           []config.User
+	NoAuth          bool
 	Recordings      []config.Recording
 	Replays         []config.Recording
 	Events          []EventRow
@@ -237,6 +238,8 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /replay.m3u", s.handleM3U("replay"))
 	m.HandleFunc("GET /app1.conf", s.handleApp1)
 
+	m.HandleFunc("GET /stream/{provider}/{stream}/v/{rend}/stream.m3u8", s.handleMediaPlaylist)
+	m.HandleFunc("GET /stream/{provider}/{stream}/v/{rend}/{file}", s.handleSegment)
 	m.HandleFunc("GET /stream/{provider}/{stream}/master.m3u8", s.handleMasterPlaylist)
 	m.HandleFunc("GET /stream/{provider}/{stream}/stream.m3u8", s.handleMediaPlaylist)
 	m.HandleFunc("GET /stream/{provider}/{stream}/{file}", s.handleSegment)

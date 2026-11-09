@@ -315,7 +315,8 @@ func EnsureDefaultAdmin(users []User) ([]User, bool) {
 }
 
 type Config struct {
-	Users []User `json:"Users"`
+	Users  []User `json:"Users"`
+	NoAuth bool   `json:"NoAuth,omitempty"`
 }
 
 type Recording struct {

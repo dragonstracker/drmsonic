@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -56,7 +57,68 @@ func (s *Server) startChannel(prov *config.Provider, st *config.Stream) {
 	ch.StatusLine = "Starting"
 	ch.LastError = ""
 
-	go s.supervise(ctx, prov, st, ch, key)
+	rends := renditionIDs(st)
+	if len(rends) <= 1 {
+		vid := ""
+		if len(rends) == 1 {
+			vid = rends[0]
+		}
+		go s.supervise(ctx, prov, st, ch, key, vid, true)
+		return
+	}
+	var wg sync.WaitGroup
+	for _, vid := range rends {
+		vid := vid
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.supervise(ctx, prov, st, ch, key, vid, false)
+		}()
+	}
+	go func() {
+		wg.Wait()
+		s.run.mu.Lock()
+		delete(s.run.runs, key)
+		s.run.mu.Unlock()
+		s.mgr.Stop(prov.Id, st.Id)
+	}()
+}
+
+func renditionIDs(st *config.Stream) []string {
+	sel := strings.TrimSpace(st.Video)
+	if sel == "" || sel == "best" {
+		return nil
+	}
+	if sel == "all" {
+		out := make([]string, 0, len(st.VideoList))
+		for _, t := range st.VideoList {
+			if t.Id == "" || t.Id == "best" || t.Id == "all" {
+				continue
+			}
+			out = append(out, t.Id)
+		}
+		return out
+	}
+	parts := strings.Split(sel, ",")
+	out := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "best" || part == "all" || part == "worst" || part == "none" {
+			continue
+		}
+		if strings.ContainsAny(part, "<>=") || strings.HasPrefix(part, "codec=") || strings.HasPrefix(part, "bw") || strings.HasPrefix(part, "h") || strings.HasPrefix(part, "top:") {
+			continue
+		}
+		for _, t := range st.VideoList {
+			if t.Id == part && !seen[part] {
+				seen[part] = true
+				out = append(out, part)
+				break
+			}
+		}
+	}
+	return out
 }
 
 func (s *Server) stopChannel(prov, stream string) {
@@ -152,16 +214,18 @@ func onDemandIdle(prov *config.Provider) time.Duration {
 	return limit
 }
 
-func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *config.Stream, ch *state.Channel, key string) {
+func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *config.Stream, ch *state.Channel, key, rend string, ownKey bool) {
 	defer func() {
-		s.run.mu.Lock()
-		delete(s.run.runs, key)
-		s.run.mu.Unlock()
-		s.mgr.Stop(prov.Id, st.Id)
+		if ownKey {
+			s.run.mu.Lock()
+			delete(s.run.runs, key)
+			s.run.mu.Unlock()
+			s.mgr.Stop(prov.Id, st.Id)
+		}
 	}()
 
 	var udp *out.UDPSender
-	if st.OutputMode == config.OutUDPPush {
+	if rend == "" && st.OutputMode == config.OutUDPPush {
 		sender, err := out.DialUDP(st.ProtoOutputParams)
 		if err != nil {
 			ch.LastError = err.Error()
@@ -184,16 +248,23 @@ func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *confi
 				return
 			case <-t.C:
 				n := atomic.SwapInt64(&inBytes, 0)
-				ch.BwIn = float64(n) * 8 / 1e6
+				if rend == "" || rend == firstRendition(st) {
+					ch.BwIn = float64(n) * 8 / 1e6
+				}
 			}
 		}
 	}()
+
+	videoSel := st.Video
+	if rend != "" {
+		videoSel = rend
+	}
 
 	cfg := pipeline.Config{
 		Name:         st.Name,
 		ManifestURL:  st.Manifest,
 		Mode:         st.Mode,
-		Video:        st.Video,
+		Video:        videoSel,
 		Audio:        st.Audio,
 		Keys:         st.Keys,
 		UserAgent:    prov.UserAgent,
@@ -221,9 +292,9 @@ func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *confi
 					log.Printf("%s/%s: udp write: %v", prov.Id, st.Id, err)
 				}
 			}
-			s.media.push(prov.Id, st.Id, seg, dur, windowFor(prov, st))
+			s.media.push(prov.Id, st.Id, rend, seg, dur, windowFor(prov, st))
 			if dur > 0 {
-				s.media.setTarget(prov.Id, st.Id, int(math.Ceil(dur)))
+				s.media.setTarget(prov.Id, st.Id, rend, int(math.Ceil(dur)))
 			}
 			atomic.AddInt64(&inBytes, int64(len(seg)))
 			if ch.StatusLine != "Running" {
@@ -231,10 +302,14 @@ func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *confi
 			}
 		},
 		Status: func(text string) {
-			ch.StatusLine = text
+			if rend == "" || rend == firstRendition(st) {
+				ch.StatusLine = text
+			}
 		},
 		Info: func(text string) {
-			ch.Info = text
+			if rend == "" || rend == firstRendition(st) {
+				ch.Info = text
+			}
 		},
 		Error: func(text string) {
 			if ctx.Err() != nil {
@@ -273,11 +348,20 @@ func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *confi
 	}
 }
 
+func firstRendition(st *config.Stream) string {
+	ids := renditionIDs(st)
+	if len(ids) == 0 {
+		return ""
+	}
+	return ids[0]
+}
+
 func (s *Server) applyTracks(prov *config.Provider, st *config.Stream, video, audio []pipeline.TrackInfo) bool {
 	if st.IgnoreUpdate {
 		return false
 	}
 	changed := false
+	wasSingle := len(renditionIDs(st)) <= 1
 
 	if len(video) > 0 {
 		list := make([]config.Track, 0, len(video))
@@ -325,6 +409,12 @@ func (s *Server) applyTracks(prov *config.Provider, st *config.Stream, video, au
 				changed = true
 			}
 		}
+	}
+	if changed && wasSingle && st.Video == "all" && len(renditionIDs(st)) > 1 {
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			s.restartChannel(prov, st)
+		}()
 	}
 	return changed
 }

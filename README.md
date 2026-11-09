@@ -186,13 +186,15 @@ On first start (no passwords stored, and no `-user`/`-password` flags), drmsonic
 Change it under **Users** after login. Auth stays on while any stored user has a password, or when both `-user` and `-password` are set on the CLI.
 
 - Panel: `/login` (session cookie). Logout from the top bar.
-- Playlists: opaque tokens, never username/password in the URL:
+- Optional **Open panel without login** on the Users page (`NoAuth` in `drmsonic.json`).
+- Playlists (o11-compatible user/pass paths):
 
 ```
-hls://host:7779/t/<stream-token>/stream/channels/channel1/master.m3u8
+http://host:7779/{username}/{password}/app1.conf
+hls://host:7779/{username}/{password}/stream/example/channel1/master.m3u8
 ```
 
-Tokens are random per user (Users → Playlist). Failed logins are rate-limited per IP.
+Token paths `/t/<stream-token>/…` still work for fetch. Failed logins are rate-limited per IP.
 
 ### Test `devloper` builds on a VPS
 

@@ -116,14 +116,11 @@ func TestLoginAndTokenPlaylist(t *testing.T) {
 		t.Fatalf("token playlist %d", rr.Code)
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "/t/"+tok+"/stream/channels/channel1/master.m3u8") {
-		t.Fatalf("token missing in %s", body)
+	if !strings.Contains(body, "/viewer/pw/stream/channels/channel1/master.m3u8") {
+		t.Fatalf("want user/pass stream urls got %s", body)
 	}
 	if strings.Contains(body, "hidden_channel1") {
 		t.Fatal("ungranted provider leaked")
-	}
-	if strings.Contains(body, "viewer/pw") {
-		t.Fatal("username/password must not appear in playlist URLs")
 	}
 }
 
@@ -140,15 +137,20 @@ func TestEmptyPasswordCannotLogin(t *testing.T) {
 	}
 }
 
-func TestGuessableUserPathRejected(t *testing.T) {
+func TestUserPassPlaylistPath(t *testing.T) {
 	tok := config.NewStreamToken()
-	users := []config.User{{Username: "admin", Password: "secret", StreamToken: tok, HasWebAccess: true, IsAdmin: true}}
+	users := []config.User{{Username: "viewer", Password: "secret", StreamToken: tok, HasWebAccess: true, ProviderIds: []string{"channels"}}}
 	s := testServer(t, Options{SessionSecret: "x"}, users, sampleProvider("channels"))
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/admin/secret/app1.conf", nil)
+	req := httptest.NewRequest(http.MethodGet, "/viewer/secret/app1.conf", nil)
+	req.Host = "host:7779"
 	s.Handler().ServeHTTP(rr, req)
-	if rr.Code == 200 && strings.Contains(rr.Body.String(), "stream") {
-		t.Fatal("user/pass path must not authorize playlists")
+	if rr.Code != 200 {
+		t.Fatalf("user/pass app1 status %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "/viewer/secret/stream/channels/channel1/master.m3u8") {
+		t.Fatalf("want user/pass stream urls got %s", body)
 	}
 }
 

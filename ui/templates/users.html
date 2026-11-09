@@ -11,10 +11,12 @@
 						</div>
 						<input class="form control" placeholder="user name" aria-label="user name"  id="addUserText" type="text" value="" />
 					</div>
-
 				</form>
-				<br>
-				<input type="submit" style="width:150px" class="btn btn-primary btn-sm" value="SAVE USERS" id="saveusers"/>
+				<div class="form-check" style="margin-bottom: 12px;">
+					<input class="form-check-input" type="checkbox" id="noauth" {{ if .NoAuth }} checked {{ end }}/>
+					<label class="form-check-label" for="noauth">Open panel without login</label>
+				</div>
+				<input type="button" style="width:150px" class="btn btn-primary btn-sm" value="SAVE USERS" id="saveusers"/>
 				<br>
 			</div>
 		</div>
@@ -42,9 +44,9 @@
 						</div>
 					</TD>
 					<TD style='text-align:center; vertical-align:middle; width:250px'>
-						<select class="selectpicker" multiple aria-label="size 2 select example" id="userProviders{{$n}}">
+						<select class="selectpicker" multiple data-width="100%" id="userProviders{{$n}}">
 							{{range $m, $p := $.Providers}}
-							<option value="{{$p.Id}}">{{$p.Name}}</option>
+							<option value="{{$p.Id}}" {{range $x, $pid := $s.ProviderIds}}{{ if eq $pid $p.Id }} selected {{ end }}{{end}}>{{$p.Name}}</option>
 							{{end}}
 						</select>
 					</TD>
@@ -70,12 +72,12 @@
 									PLAYLIST
 								</button>
 								<ul class="dropdown-menu">
-									{{ if $s.StreamToken }}
-									<li><a class="dropdown-item" href="t/{{pathEscape $s.StreamToken}}/playlist.m3u">Full</a></li>
-									<li><a class="dropdown-item" href="t/{{pathEscape $s.StreamToken}}/live.m3u">Live</a></li>
-									<li><a class="dropdown-item" href="t/{{pathEscape $s.StreamToken}}/event.m3u">Events</a></li>
-									<li><a class="dropdown-item" href="t/{{pathEscape $s.StreamToken}}/replay.m3u">Replays</a></li>
-									<li><a class="dropdown-item" href="t/{{pathEscape $s.StreamToken}}/app1.conf">App1</a></li>
+									{{ if $s.Password }}
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/playlist.m3u">Full</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/live.m3u">Live</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/event.m3u">Events</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/replay.m3u">Replays</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/app1.conf">App1</a></li>
 									{{ else }}
 									<li><span class="dropdown-item disabled">Set a password to unlock links</span></li>
 									{{ end }}
@@ -87,10 +89,8 @@
 							<input type="button" class="btn btn-primary" id="deleteuser{{$n}}" value="DELETE" />
 						</div>
 					</TD>
-
 				</TR>
 				{{ end }}
-
 			</tbody>
 		</table>
 
@@ -112,24 +112,13 @@
 				haswebaccessDiv{{$n}}.onchange = updateUser;
 				deleteuser{{$n}}.onclick = deleteUserClick;
 				renameuser{{$n}}.onclick = renameUserClick;
-
-				var picker = document.getElementById('userProviders{{$n}}')
-				for (i=0; i<picker.length; i++) {
-					{{range $m, $p := .ProviderIds}}
-						if ('{{$p}}' == picker[i].value) {
-							picker[i].selected = true
-						}
-					{{end}}
-				}
 			{{end}}
 
-			var usersTable = $('#usersTable').removeAttr('width').DataTable( {
-								"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
-								"autoWidth": false
-						});
-
+			$('.selectpicker').selectpicker();
+			var usersTable = $('#usersTable').removeAttr('width').DataTable({
+				"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
+				"autoWidth": false
+			});
 		</script>
-
 	</body>
-
 </html>

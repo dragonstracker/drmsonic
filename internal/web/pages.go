@@ -118,6 +118,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 	p := s.basePage(r)
 	p.Title = "Users"
 	p.Users = s.store.Users()
+	p.NoAuth = s.store.NoAuth()
 	s.render(w, "users.html", p)
 }
 
@@ -158,18 +159,29 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) streamCredPrefix(r *http.Request) string {
-	if tok, ok := pathToken(r); ok && tok != "" {
-		return tokenPrefix(tok)
+	if u, p, ok := pathUserPass(r); ok {
+		return userPassPrefix(u, p)
 	}
 	u, ok := s.currentUser(r)
-	if !ok {
-		return ""
+	if ok {
+		pass := u.Password
+		if pass == "" {
+			if full, ok2 := s.store.UserByName(u.Username); ok2 {
+				pass = full.Password
+			}
+		}
+		if u.Username != "" && pass != "" {
+			return userPassPrefix(u.Username, pass)
+		}
+		if s.staticToken != "" && u.Username == s.opts.User && s.opts.Password != "" {
+			return userPassPrefix(s.opts.User, s.opts.Password)
+		}
+		if u.StreamToken != "" {
+			return tokenPrefix(u.StreamToken)
+		}
 	}
-	if u.StreamToken != "" {
-		return tokenPrefix(u.StreamToken)
-	}
-	if s.staticToken != "" && u.Username == s.opts.User {
-		return tokenPrefix(s.staticToken)
+	if tok, ok := pathToken(r); ok && tok != "" {
+		return tokenPrefix(tok)
 	}
 	return ""
 }
@@ -226,16 +238,39 @@ func (s *Server) handleMasterPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-mpegurl")
-	s.media.touch(prov.Id, st.Id)
+	s.media.touch(prov.Id, st.Id, "")
 	if err := s.ensureRunning(prov, st); err != nil {
 		http.Error(w, "#EXTM3U\n", http.StatusServiceUnavailable)
 		return
 	}
-	bandwidth := 0
-	res := "1920x1080"
-	fps := "30.00"
-	codecs := "avc1.640028,mp4a.40.2"
+	audioCodec := ""
+	if st.Audio != "none" && len(st.AudioList) > 0 {
+		audioCodec = st.AudioList[0].Codecs
+		if audioCodec == "" {
+			audioCodec = "mp4a.40.2"
+		}
+	}
+	fmt.Fprintf(w, "#EXTM3U\n")
+	rends := renditionIDs(st)
+	if len(rends) > 1 {
+		for _, id := range rends {
+			t := trackByID(st, id)
+			bandwidth, res, fps, codecs := variantMeta(t, audioCodec)
+			fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
+			fmt.Fprintf(w, "v/%s/stream.m3u8%s\n", id, queryString(r))
+		}
+		return
+	}
 	v := selectedVideo(st)
+	bandwidth, res, fps, codecs := variantMeta(v, audioCodec)
+	fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
+	fmt.Fprintf(w, "stream.m3u8%s\n", queryString(r))
+}
+
+func variantMeta(v *config.Track, audioCodec string) (bandwidth int, res, fps, codecs string) {
+	res = "1920x1080"
+	fps = "30.00"
+	codecs = "avc1.640028"
 	if v != nil {
 		bandwidth = v.Bandwidth
 		if v.Width > 0 && v.Height > 0 {
@@ -251,16 +286,19 @@ func (s *Server) handleMasterPlaylist(w http.ResponseWriter, r *http.Request) {
 	if bandwidth == 0 {
 		bandwidth = 8133000
 	}
-	if st.Audio != "none" && len(st.AudioList) > 0 {
-		codec := st.AudioList[0].Codecs
-		if codec == "" {
-			codec = "mp4a.40.2"
-		}
-		codecs += "," + codec
+	if audioCodec != "" {
+		codecs += "," + audioCodec
 	}
-	fmt.Fprintf(w, "#EXTM3U\n")
-	fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
-	fmt.Fprintf(w, "stream.m3u8%s\n", queryString(r))
+	return bandwidth, res, fps, codecs
+}
+
+func trackByID(st *config.Stream, id string) *config.Track {
+	for i := range st.VideoList {
+		if st.VideoList[i].Id == id {
+			return &st.VideoList[i]
+		}
+	}
+	return nil
 }
 
 func (s *Server) handleMediaPlaylist(w http.ResponseWriter, r *http.Request) {
@@ -268,14 +306,15 @@ func (s *Server) handleMediaPlaylist(w http.ResponseWriter, r *http.Request) {
 	if prov == nil {
 		return
 	}
+	rend := r.PathValue("rend")
 	w.Header().Set("Content-Type", "application/x-mpegurl")
-	s.media.touch(prov.Id, st.Id)
+	s.media.touch(prov.Id, st.Id, rend)
 	if err := s.ensureRunning(prov, st); err != nil {
 		http.Error(w, "stream unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	s.awaitSegments(r, prov, st, 2, 10*time.Second)
-	buf := s.segments(prov, st)
+	s.awaitSegments(r, prov, st, rend, 2, 10*time.Second)
+	buf := s.segments(prov, st, rend)
 	seq := buf.Seq
 	if len(buf.Items) > 0 {
 		seq = buf.Items[0].Seq
@@ -297,12 +336,13 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 	if prov == nil {
 		return
 	}
+	rend := r.PathValue("rend")
 	name := r.PathValue("file")
 	if !strings.HasSuffix(name, ".ts") {
 		http.NotFound(w, r)
 		return
 	}
-	s.media.touch(prov.Id, st.Id)
+	s.media.touch(prov.Id, st.Id, rend)
 	if err := s.ensureRunning(prov, st); err != nil {
 		http.Error(w, "stream unavailable", http.StatusServiceUnavailable)
 		return
@@ -310,8 +350,8 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 	if ch := s.mgr.Get(prov.Id, st.Id); ch != nil && ch.Running {
 		ch.Readers++
 	}
-	s.awaitSegments(r, prov, st, 1, 5*time.Second)
-	data, ok := s.segmentData(prov, st, name)
+	s.awaitSegments(r, prov, st, rend, 1, 5*time.Second)
+	data, ok := s.segmentData(prov, st, rend, name)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -321,12 +361,12 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func (s *Server) awaitSegments(r *http.Request, prov *config.Provider, st *config.Stream, want int, limit time.Duration) {
+func (s *Server) awaitSegments(r *http.Request, prov *config.Provider, st *config.Stream, rend string, want int, limit time.Duration) {
 	if want < 1 {
 		want = 1
 	}
 	deadline := time.Now().Add(limit)
-	for len(s.segments(prov, st).Items) < want {
+	for len(s.segments(prov, st, rend).Items) < want {
 		if time.Now().After(deadline) || r.Context().Err() != nil {
 			return
 		}
