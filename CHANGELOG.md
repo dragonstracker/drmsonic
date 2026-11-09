@@ -51,6 +51,7 @@ Versions follow the release tags on GitHub.
 - All-qualities master only advertises variants that already have segments; remux starts are staggered.
 
 ### Fixed
+- Empty `app1.conf` / playlist responses were a blank page when a provider had no streams; they now carry a `no streams configured` marker.
 - Users and Recordings pages shipped a JavaScript syntax error: `html/template` inserts spaces around actions inside `<script>`, so `deleteuser{{$n}}.onclick` rendered as `deleteuser 0 .onclick` and killed the whole inline script. ADD USER, SAVE USERS, DELETE, RENAME and the recording player never bound.
 - Users row actions now use event delegation (`data-user-action`), so no Go value is ever spliced into a JS identifier.
 - Users password / providers / NoAuth save crashed when the providers select returned null.

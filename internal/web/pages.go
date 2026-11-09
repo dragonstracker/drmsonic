@@ -192,6 +192,7 @@ func (s *Server) handleApp1(w http.ResponseWriter, r *http.Request) {
 	host := strings.TrimPrefix(strings.TrimPrefix(s.baseFor(r), "http://"), "https://")
 	prefix := s.streamCredPrefix(r)
 	var b strings.Builder
+	count := 0
 	for _, p := range s.visibleProviders(r) {
 		for i := range p.Streams {
 			st := &p.Streams[i]
@@ -199,7 +200,11 @@ func (s *Server) handleApp1(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(&b, "\turl hls://%s%s/stream/%s/%s/master.m3u8;\n", host, prefix, p.Id, st.Id)
 			fmt.Fprintf(&b, "\ttitle \"[%s] %s\";\n", p.Id, st.Name)
 			fmt.Fprintf(&b, "}\n\n")
+			count++
 		}
+	}
+	if count == 0 {
+		b.WriteString("# drmsonic: no streams configured\n")
 	}
 	fmt.Fprint(w, b.String())
 }
@@ -211,6 +216,7 @@ func (s *Server) handleM3U(scope string) http.HandlerFunc {
 		var b strings.Builder
 		b.WriteString("#EXTM3U x-tvg-url=\"\"\n\n")
 		base := s.baseFor(r)
+		count := 0
 
 		for _, p := range s.visibleProviders(r) {
 			for i := range p.Streams {
@@ -227,7 +233,11 @@ func (s *Server) handleM3U(scope string) http.HandlerFunc {
 				fmt.Fprintf(&b, "#EXTINF:1 group-title=\"%s\" tvg-id=\"%s/%s\" tvg-logo=\"\" provider=\"%s\" provider-logo=\"\" provider-type=\"iptv\",[%s] %s\n",
 					p.Id, p.Id, st.Id, p.Id, p.Id, st.Name)
 				fmt.Fprintf(&b, "%s%s/stream/%s/%s/master.m3u8\n\n", base, prefix, p.Id, st.Id)
+				count++
 			}
+		}
+		if count == 0 {
+			b.WriteString("# drmsonic: no streams configured\n")
 		}
 		fmt.Fprint(w, b.String())
 	}

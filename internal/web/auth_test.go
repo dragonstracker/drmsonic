@@ -78,6 +78,68 @@ func TestOpenServerPlainURLs(t *testing.T) {
 	}
 }
 
+func TestApp1UserPassPrefix(t *testing.T) {
+	users := []config.User{{
+		Username: "bob", Password: "pw", StreamToken: config.NewStreamToken(),
+		HasWebAccess: true, IsAdmin: true,
+	}}
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, users, sampleProvider("channels"))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/bob/pw/app1.conf", nil)
+	req.Host = "example.test:7779"
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != 200 {
+		t.Fatalf("status %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "hls://example.test:7779/bob/pw/stream/channels/channel1/master.m3u8") {
+		t.Fatalf("unexpected body: %s", body)
+	}
+}
+
+func TestEmptyPlaylistMarker(t *testing.T) {
+	blank := &config.Provider{Id: "blank", Name: "blank", RunningMode: config.RunInternalRemuxer, OutputMode: config.OutDirectHLS}
+	s := testServer(t, Options{}, nil, blank)
+
+	for _, path := range []string{"/app1.conf", "/playlist.m3u"} {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Host = "example.test:7779"
+		s.Handler().ServeHTTP(rr, req)
+		if rr.Code != 200 {
+			t.Fatalf("%s status %d", path, rr.Code)
+		}
+		if !strings.Contains(rr.Body.String(), "no streams configured") {
+			t.Fatalf("%s missing marker: %s", path, rr.Body.String())
+		}
+	}
+}
+
+func TestNoAuthOpensPlaylists(t *testing.T) {
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, nil, sampleProvider("channels"))
+	s.store.SetNoAuth(true)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/app1.conf", nil)
+	req.Host = "example.test:7779"
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != 200 {
+		t.Fatalf("status %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "hls://example.test:7779/stream/channels/channel1/master.m3u8") {
+		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+}
+
+func TestNoAuthOffRedirectsPlaylists(t *testing.T) {
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, nil, sampleProvider("channels"))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/app1.conf", nil)
+	req.Host = "example.test:7779"
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusFound || rr.Header().Get("Location") != "/login" {
+		t.Fatalf("status %d location %s", rr.Code, rr.Header().Get("Location"))
+	}
+}
 func TestLoginAndTokenPlaylist(t *testing.T) {
 	tok := config.NewStreamToken()
 	users := []config.User{{
