@@ -38,7 +38,6 @@ type Server struct {
 	mgr         *state.Manager
 	tmpl        *template.Template
 	mux         *http.ServeMux
-	static      http.Handler
 	media       *mediaStore
 	run         *channelRuntime
 	sessions    *sessionStore
@@ -179,7 +178,6 @@ func New(opts Options, store *config.Store, mgr *state.Manager) (*Server, error)
 		mgr:         mgr,
 		tmpl:        tmpl,
 		mux:         http.NewServeMux(),
-		static:      http.FileServer(http.FS(ui.Static())),
 		media:       newMediaStore(),
 		run:         newRuntime(),
 		sessions:    newSessionStore(),
@@ -204,10 +202,7 @@ func (s *Server) ShutdownSignal() <-chan struct{} {
 func (s *Server) routes() {
 	m := s.mux
 
-	m.HandleFunc("GET /static/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-cache")
-		http.StripPrefix("/static/", s.static).ServeHTTP(w, r)
-	})
+	m.HandleFunc("GET /static/", newStaticHandler(ui.Static()).ServeHTTP)
 
 	m.HandleFunc("GET /login", s.handleLogin)
 	m.HandleFunc("POST /login", s.handleLogin)
@@ -249,7 +244,7 @@ func (s *Server) routes() {
 }
 
 func (s *Server) Handler() http.Handler {
-	return s.logWrap(s.pathAuthRewrite(s.authWrap(s.mux)))
+	return s.logWrap(gzipDynamic(s.pathAuthRewrite(s.authWrap(s.mux))))
 }
 
 func (s *Server) logWrap(next http.Handler) http.Handler {

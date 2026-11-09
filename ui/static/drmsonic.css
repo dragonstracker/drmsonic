@@ -144,6 +144,10 @@ textarea {
 	vertical-align: top;
 }
 
+#streamsTable.channels tbody td {
+	height: 170px;
+}
+
 #streamsTable .form-check {
 	margin-bottom: 0.15rem;
 }

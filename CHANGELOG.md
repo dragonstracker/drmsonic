@@ -36,6 +36,11 @@ Versions follow the release tags on GitHub.
 - New users default to Web Access on.
 - Config / Channels built the full editor only for the page that was open on first load, so any channel reached by paging, **Show All**, or search showed an empty row. Every channel now builds its editor when it is drawn.
 - Config / Channels column widths summed past 100% and pushed the options column out of the window.
+- Panel assets were served uncompressed over ten requests, so a remote panel spent seconds loading before the first row appeared; JS and CSS are now gzipped, content-hashed with `ETag` revalidation, and delivered as three bundles (`app.js`, `app.css`, `tz.js`).
+- Panel HTML and `/api/action` JSON were uncompressed; both are gzipped now.
+- `hls.min.js` blocked every page even though only the player needs it; it loads on first play.
+- Config / Channels rows grew from 55px to 170px once their editors arrived, shifting the page while it filled; the row height is reserved up front.
+- The first channel build waited for the status poll before requesting config; the config request now starts in parallel.
 
 ### Added
 - Default `admin` / `admin` on first install when no passwords exist (changeable under Users).

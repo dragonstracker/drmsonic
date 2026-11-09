@@ -39,12 +39,35 @@ async function noPlayer(e) {
 	showStatusWindow('Stream not available');
 }
 
+var hlsLoader = null;
+
+function loadHls() {
+	if (typeof Hls !== 'undefined') {
+		return Promise.resolve(true)
+	}
+	if (!hlsLoader) {
+		hlsLoader = new Promise(function (resolve) {
+			var script = document.createElement('script');
+			script.src = document.getElementById('baseUrl').value + 'static/hls.min.js';
+			script.onload = function () { resolve(true) };
+			script.onerror = function () { hlsLoader = null; resolve(false) };
+			document.head.appendChild(script);
+		});
+	}
+	return hlsLoader
+}
+
 async function setPlayer(e, id) {
 	e.preventDefault();
 
 	video = document.getElementById('player');
 	if (!video) {
 		return false
+	}
+
+	if (!(await loadHls())) {
+		showStatusWindow('Player library unavailable');
+		return
 	}
 
 	if (!id) {
@@ -1959,8 +1982,28 @@ async function updateStreams(table, init) {
 	}
 }
 
+function requestConf(providerId, idsList) {
+	return fetch(document.getElementById('baseUrl').value+'api/action', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		credentials: 'same-origin',
+		body: JSON.stringify({
+			Action : "getconf",
+			ProviderId : providerId,
+			Streams: [  { "Id" : idsList, } ]
+		}),
+	})
+}
+
 async function updateStreamsBody(table, init, providerId) {
 	idsList = getVisibleIds();
+
+	var pendingConf = null;
+	if (init) {
+		pendingConf = requestConf(providerId, idsList).catch(function () { return null });
+	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
 		method: 'POST',
@@ -2024,19 +2067,12 @@ async function updateStreamsBody(table, init, providerId) {
 		GlobalChangeCounter = -1;
 	}
 
-	if (idsList != '' || data.GlobalChangeCounter > GlobalChangeCounter) {
-		let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			credentials: 'same-origin',
-			body: JSON.stringify({
-				Action : "getconf",
-				ProviderId : providerId,
-				Streams: [  { "Id" : idsList, } ]
-			}),
-		})
+	if (idsList != '' || pendingConf || data.GlobalChangeCounter > GlobalChangeCounter) {
+		let response = pendingConf ? await pendingConf : await requestConf(providerId, idsList)
+
+		if (!response) {
+			return
+		}
 
 		text = await response.text();
 		if (!response.ok) {
