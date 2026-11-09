@@ -98,13 +98,6 @@ func (t *loginThrottle) clear(ip string) {
 	t.mu.Unlock()
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func setSessionCookie(w http.ResponseWriter, id string, exp time.Time) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,

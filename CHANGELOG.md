@@ -27,6 +27,7 @@ Versions follow the release tags on GitHub.
 - Empty-password users could authenticate.
 - Admin vs panel-user capabilities were not enforced.
 - Guessable username/password playlist paths removed.
+- Selector comma filters (`h<=720,codec=avc1`) AND together instead of OR.
 
 ## [1.1.3] — 2026-11-09
 

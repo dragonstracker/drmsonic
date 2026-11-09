@@ -51,33 +51,48 @@ func pick(tracks []manifest.Track, sel string, isVideo bool, notes []string) ([]
 	}
 
 	tokens := strings.Split(sel, ",")
-	out := make([]manifest.Track, 0, len(tokens))
-	seen := map[string]bool{}
+	var filters []string
+	var ids []string
 	for _, tok := range tokens {
 		tok = strings.TrimSpace(tok)
 		if tok == "" || tok == "best" || tok == "all" || tok == "worst" || tok == "none" {
 			continue
 		}
-		if filtered, ok := filterToken(tracks, tok, isVideo); ok {
-			for _, t := range filtered {
-				if !seen[t.ID] {
-					seen[t.ID] = true
-					out = append(out, t)
-				}
-			}
+		if _, ok := filterToken(tracks, tok, isVideo); ok {
+			filters = append(filters, tok)
 			continue
 		}
-		found := false
-		for _, t := range tracks {
-			if t.ID == tok && !seen[t.ID] {
+		ids = append(ids, tok)
+	}
+
+	cand := tracks
+	for _, f := range filters {
+		cand, _ = filterToken(cand, f, isVideo)
+	}
+
+	out := make([]manifest.Track, 0, len(cand))
+	seen := map[string]bool{}
+	if len(ids) == 0 {
+		for _, t := range cand {
+			if !seen[t.ID] {
 				seen[t.ID] = true
 				out = append(out, t)
-				found = true
-				break
 			}
 		}
-		if !found {
-			notes = append(notes, fmt.Sprintf("unknown id %q dropped", tok))
+	} else {
+		for _, id := range ids {
+			found := false
+			for _, t := range cand {
+				if t.ID == id && !seen[t.ID] {
+					seen[t.ID] = true
+					out = append(out, t)
+					found = true
+					break
+				}
+			}
+			if !found {
+				notes = append(notes, fmt.Sprintf("unknown id %q dropped", id))
+			}
 		}
 	}
 	if len(out) == 0 && len(tracks) > 0 {
