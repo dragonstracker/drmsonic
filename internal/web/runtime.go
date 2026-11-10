@@ -58,6 +58,7 @@ func (s *Server) startChannel(prov *config.Provider, st *config.Stream) {
 	ch := s.mgr.Ensure(prov.Id, st.Id)
 	ch.StatusLine = "Starting"
 	ch.LastError = ""
+	s.media.touch(prov.Id, st.Id, "")
 
 	rends := renditionIDs(st)
 	if len(rends) <= 1 {
@@ -195,7 +196,7 @@ func (s *Server) sweepOnDemand() {
 	for _, prov := range s.store.Providers() {
 		for i := range prov.Streams {
 			st := &prov.Streams[i]
-			if !st.OnDemand {
+			if !st.OnDemand || st.Autostart {
 				continue
 			}
 			ch := s.mgr.Get(prov.Id, st.Id)
