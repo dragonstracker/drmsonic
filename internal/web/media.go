@@ -126,6 +126,28 @@ func (m *mediaStore) idle(p, s string) time.Duration {
 	return time.Since(at)
 }
 
+func (m *mediaStore) bitrate(p, s, rend string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	b, ok := m.bufs[mediaKey(p, s, rend)]
+	if !ok || len(b.Items) < 2 {
+		return 0
+	}
+	var bits float64
+	var secs float64
+	for _, it := range b.Items {
+		if it.Duration <= 0 {
+			continue
+		}
+		bits += float64(len(it.Data)) * 8
+		secs += it.Duration
+	}
+	if secs <= 0 {
+		return 0
+	}
+	return int(bits / secs)
+}
+
 func (m *mediaStore) drop(p, s string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

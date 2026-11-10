@@ -272,7 +272,7 @@ func (s *Server) handleMasterPlaylist(w http.ResponseWriter, r *http.Request) {
 	if prov == nil {
 		return
 	}
-	w.Header().Set("Content-Type", "application/x-mpegurl")
+	w.Header().Set("Content-Type", hlsMIME)
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-store")
 	s.media.touch(prov.Id, st.Id, "")
@@ -308,23 +308,31 @@ func (s *Server) handleMasterPlaylist(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			t := trackByID(st, id)
-			bandwidth, res, fps, codecs := variantMeta(t, audioCodec)
+			bandwidth, res, fps, codecs := s.variantMeta(prov, st, id, t, audioCodec)
 			fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
 			fmt.Fprintf(w, "v/%s/stream.m3u8%s\n", id, queryString(r))
 			emitted++
 		}
 		if emitted == 0 {
 			t := trackByID(st, rends[0])
-			bandwidth, res, fps, codecs := variantMeta(t, audioCodec)
+			bandwidth, res, fps, codecs := s.variantMeta(prov, st, rends[0], t, audioCodec)
 			fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
 			fmt.Fprintf(w, "v/%s/stream.m3u8%s\n", rends[0], queryString(r))
 		}
 		return
 	}
 	v := selectedVideo(st)
-	bandwidth, res, fps, codecs := variantMeta(v, audioCodec)
+	bandwidth, res, fps, codecs := s.variantMeta(prov, st, "", v, audioCodec)
 	fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
 	fmt.Fprintf(w, "stream.m3u8%s\n", queryString(r))
+}
+
+func (s *Server) variantMeta(prov *config.Provider, st *config.Stream, rend string, v *config.Track, audioCodec string) (bandwidth int, res, fps, codecs string) {
+	bandwidth, res, fps, codecs = variantMeta(v, audioCodec)
+	if measured := s.media.bitrate(prov.Id, st.Id, rend); measured > 0 {
+		bandwidth = measured
+	}
+	return bandwidth, res, fps, codecs
 }
 
 func variantMeta(v *config.Track, audioCodec string) (bandwidth int, res, fps, codecs string) {
@@ -368,7 +376,7 @@ func (s *Server) handleMediaPlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 	rend := r.PathValue("rend")
 	writeMediaHeaders(w)
-	w.Header().Set("Content-Type", "application/x-mpegurl")
+	w.Header().Set("Content-Type", hlsMIME)
 	w.Header().Set("Cache-Control", "no-store")
 	s.media.touch(prov.Id, st.Id, rend)
 	if err := s.ensureRunning(prov, st); err != nil {
@@ -423,6 +431,8 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", fmt.Sprint(len(data)))
 	w.Write(data)
 }
+
+const hlsMIME = "application/vnd.apple.mpegurl"
 
 func writeMediaHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
