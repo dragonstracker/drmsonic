@@ -215,11 +215,11 @@ func (s *Server) sweepOnDemand() {
 func onDemandIdle(prov *config.Provider) time.Duration {
 	secs := prov.PlaylistDuration
 	if secs <= 0 {
-		secs = 30
+		secs = 60
 	}
 	limit := time.Duration(secs) * time.Second
-	if limit < 20*time.Second {
-		limit = 20 * time.Second
+	if limit < 60*time.Second {
+		limit = 60 * time.Second
 	}
 	return limit
 }

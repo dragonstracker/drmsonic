@@ -48,6 +48,8 @@ Versions follow the release tags on GitHub.
 - Media handlers blocked the player: an unknown segment name waited 5s before 404, a cold playlist waited 10s for two segments, and a cold master waited 8s. Segments now answer immediately unless the request is exactly the next sequence, playlists return whatever is buffered, and the cold-start wait is one playlist length.
 - Playlists and segments sent no `Access-Control-Allow-Origin`, so browser players refused them. Media responses now allow any origin, and playlists are `no-store` so no proxy serves a stale window.
 - The segment buffer kept `window+6` fragments and advertised six by default; it keeps `window+8` and advertises seven, matching the reference layout.
+- DASH live playlists advanced in bursts of two or three every five seconds, because the manifest was only re-read once per `minimumUpdatePeriod` (`PT5S` on most CDNs). The refresh interval is now capped by the segment duration, so a 2s channel yields one segment every 2s.
+- On-demand streams were stopped after a 20s pause, dropping the buffer while the viewer was still attached. The idle window is now at least 60s.
 
 ### Added
 - Default `admin` / `admin` on first install when no passwords exist (changeable under Users).

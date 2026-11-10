@@ -101,6 +101,15 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 	if update > 10*time.Second {
 		update = 10 * time.Second
 	}
+	if seg := segmentSeconds(vSrc, aSrc); seg > 0 {
+		cadence := time.Duration(seg * float64(time.Second))
+		if cadence < time.Second {
+			cadence = time.Second
+		}
+		if cadence < update {
+			update = cadence
+		}
+	}
 
 	var muxer *mux.Muxer
 	if vSrc != nil {
@@ -378,6 +387,27 @@ func pickNext(t *manifest.Track, last int64, live bool) (manifest.SegmentRef, bo
 		tail = 6
 	}
 	return pickFromRefs(t.TailSegments(tail), last, live)
+}
+
+func segmentSeconds(v, a *streamState) float64 {
+	for _, s := range []*streamState{v, a} {
+		if s == nil || s.track == nil || s.track.Timescale <= 0 {
+			continue
+		}
+		ts := float64(s.track.Timescale)
+		if s.track.Template != nil {
+			if s.track.Template.Duration > 0 {
+				return float64(s.track.Template.Duration) / ts
+			}
+			items := s.track.Template.Timeline
+			if items != nil && len(items.Items) > 0 {
+				if d := items.Items[len(items.Items)-1].D; d > 0 {
+					return float64(d) / ts
+				}
+			}
+		}
+	}
+	return 0
 }
 
 func pickNextSrc(s *streamState, live bool) (manifest.SegmentRef, bool) {
