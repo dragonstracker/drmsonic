@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -477,16 +478,17 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := clientIP(r, s.opts.TrustedProxies)
-	if s.throttle.blocked(ip) {
-		s.renderLogin(w, "Too many attempts. Try again later.")
-		return
-	}
 	_ = r.ParseForm()
 	user := strings.TrimSpace(r.FormValue("username"))
 	pass := r.FormValue("password")
 	u, ok := s.authenticate(user, pass, ip)
 	if !ok {
+		if s.throttle.blocked(ip) {
+			s.renderLogin(w, "Too many attempts. Try again later.")
+			return
+		}
 		s.throttle.record(ip)
+		log.Printf("login failed for %q from %s", user, ip)
 		s.renderLogin(w, "Invalid username or password.")
 		return
 	}

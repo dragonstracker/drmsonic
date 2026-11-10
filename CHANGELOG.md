@@ -22,6 +22,9 @@ Versions follow the release tags on GitHub.
 - Playlist links use stream tokens instead of `/{user}/{pass}/`.
 
 ### Fixed
+- A single wrong password locked the panel out for everyone behind that IP address, and the correct password was refused while the lockout ran, so retrying kept the lockout alive. A correct login now always succeeds; the delay only slows down wrong guesses.
+- Login failures raised the delay forever because the count never expired. Failures now decay after ten quiet minutes, and the delay is capped at 30s.
+- Failed logins were silent. They are logged with the username and the client address.
 - Auth ignored panel users unless `-user`/`-password` were set.
 - `?user=` alone could grant access without a password.
 - Empty-password users could authenticate.

@@ -65,8 +65,14 @@ type loginThrottle struct {
 
 type failInfo struct {
 	Count int
+	Last  time.Time
 	Until time.Time
 }
+
+const (
+	throttleReset    = 10 * time.Minute
+	throttleMaxDelay = 30 * time.Second
+)
 
 func newLoginThrottle() *loginThrottle {
 	return &loginThrottle{fail: make(map[string]failInfo)}
@@ -79,6 +85,10 @@ func (t *loginThrottle) blocked(ip string) bool {
 	if !ok {
 		return false
 	}
+	if time.Since(f.Last) > throttleReset {
+		delete(t.fail, ip)
+		return false
+	}
 	return time.Now().Before(f.Until)
 }
 
@@ -86,9 +96,16 @@ func (t *loginThrottle) record(ip string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	f := t.fail[ip]
+	if time.Since(f.Last) > throttleReset {
+		f.Count = 0
+	}
 	f.Count++
-	delay := time.Duration(1<<min(f.Count, 6)) * time.Second
-	f.Until = time.Now().Add(delay)
+	f.Last = time.Now()
+	delay := time.Duration(1<<min(f.Count-1, 5)) * time.Second
+	if delay > throttleMaxDelay {
+		delay = throttleMaxDelay
+	}
+	f.Until = f.Last.Add(delay)
 	t.fail[ip] = f
 }
 
