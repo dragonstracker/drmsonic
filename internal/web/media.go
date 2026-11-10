@@ -61,7 +61,7 @@ func (m *mediaStore) push(p, s, rend string, data []byte, dur float64, window in
 	seq := b.Seq
 	seg := Segment{Seq: seq, Name: segmentName(seq), Duration: dur, Data: data}
 	b.Items = append(b.Items, seg)
-	keep := window + 6
+	keep := window + 8
 	if len(b.Items) > keep {
 		b.Items = b.Items[len(b.Items)-keep:]
 	}
@@ -186,7 +186,7 @@ func windowFor(prov *config.Provider, st *config.Stream) int {
 		n = prov.NbAnnouncedFragments
 	}
 	if n <= 0 {
-		n = 6
+		n = 7
 	}
 	return n
 }

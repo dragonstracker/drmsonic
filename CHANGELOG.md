@@ -44,6 +44,10 @@ Versions follow the release tags on GitHub.
 - Bundling the CSS turned every panel page white: `drmsonic.css` begins with a UTF-8 BOM, and inside a bundle that byte swallowed the `body { background: black }` rule. Leading BOMs are stripped when assets are read, and the file itself no longer carries one.
 - Streams and Events ignored the provider in the URL: every page rendered one table per configured provider, so `/status/example` listed all 45 streams of both providers under a 45-stream total. Only the selected provider renders now; **All Running** still spans every provider, and the provider picker keeps listing all of them.
 - Filter changes threw on pages where no provider was preselected, because the filter and delete handlers read a provider from an unselected dropdown; they now fall back to the provider in the URL.
+- `handleSegment` counted a reader per request and never released it; the counter is only ever read by the monitoring page, so it no longer drifts.
+- Media handlers blocked the player: an unknown segment name waited 5s before 404, a cold playlist waited 10s for two segments, and a cold master waited 8s. Segments now answer immediately unless the request is exactly the next sequence, playlists return whatever is buffered, and the cold-start wait is one playlist length.
+- Playlists and segments sent no `Access-Control-Allow-Origin`, so browser players refused them. Media responses now allow any origin, and playlists are `no-store` so no proxy serves a stale window.
+- The segment buffer kept `window+6` fragments and advertised six by default; it keeps `window+8` and advertises seven, matching the reference layout.
 
 ### Added
 - Default `admin` / `admin` on first install when no passwords exist (changeable under Users).

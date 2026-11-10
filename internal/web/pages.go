@@ -202,6 +202,7 @@ func (s *Server) streamCredPrefix(r *http.Request) string {
 
 func (s *Server) handleApp1(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if !s.canUsePlaylist(r) {
 		http.Error(w, "# drmsonic: playlist access disabled for this account", http.StatusForbidden)
 		return
@@ -229,6 +230,8 @@ func (s *Server) handleApp1(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleM3U(scope string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-mpegurl")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Cache-Control", "no-store")
 		if !s.canUsePlaylist(r) {
 			http.Error(w, "# drmsonic: playlist access disabled for this account", http.StatusForbidden)
 			return
@@ -270,6 +273,8 @@ func (s *Server) handleMasterPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-mpegurl")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-store")
 	s.media.touch(prov.Id, st.Id, "")
 	if err := s.ensureRunning(prov, st); err != nil {
 		http.Error(w, "#EXTM3U\n", http.StatusServiceUnavailable)
@@ -296,7 +301,7 @@ func (s *Server) handleMasterPlaylist(w http.ResponseWriter, r *http.Request) {
 			}
 			return ba > bb
 		})
-		s.awaitSegments(r, prov, st, rends[0], 1, 8*time.Second)
+		s.awaitSegments(r, prov, st, rends[0], 1, coldStartWait(prov, st))
 		emitted := 0
 		for _, id := range rends {
 			if len(s.segments(prov, st, id).Items) == 0 {
@@ -362,13 +367,15 @@ func (s *Server) handleMediaPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rend := r.PathValue("rend")
+	writeMediaHeaders(w)
 	w.Header().Set("Content-Type", "application/x-mpegurl")
+	w.Header().Set("Cache-Control", "no-store")
 	s.media.touch(prov.Id, st.Id, rend)
 	if err := s.ensureRunning(prov, st); err != nil {
 		http.Error(w, "stream unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	s.awaitSegments(r, prov, st, rend, 2, 10*time.Second)
+	s.awaitSegments(r, prov, st, rend, 1, coldStartWait(prov, st))
 	buf := s.segments(prov, st, rend)
 	items := buf.Items
 	if n := windowFor(prov, st); len(items) > n {
@@ -401,13 +408,11 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	writeMediaHeaders(w)
 	s.media.touch(prov.Id, st.Id, rend)
 	if err := s.ensureRunning(prov, st); err != nil {
 		http.Error(w, "stream unavailable", http.StatusServiceUnavailable)
 		return
-	}
-	if ch := s.mgr.Get(prov.Id, st.Id); ch != nil && ch.Running {
-		ch.Readers++
 	}
 	data, ok := s.awaitSegment(r, prov, st, rend, name)
 	if !ok {
@@ -417,6 +422,19 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "video/mp2t")
 	w.Header().Set("Content-Length", fmt.Sprint(len(data)))
 	w.Write(data)
+}
+
+func writeMediaHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Accel-Buffering", "no")
+}
+
+func coldStartWait(prov *config.Provider, st *config.Stream) time.Duration {
+	d := time.Duration(windowFor(prov, st)) * time.Second
+	if d < 2*time.Second {
+		d = 2 * time.Second
+	}
+	return d
 }
 
 func (s *Server) awaitSegments(r *http.Request, prov *config.Provider, st *config.Stream, rend string, want int, limit time.Duration) {
@@ -441,22 +459,29 @@ func (s *Server) awaitSegment(r *http.Request, prov *config.Provider, st *config
 	if !ok {
 		return nil, false
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	var deadline time.Time
 	for {
 		if data, found := s.segmentData(prov, st, rend, name); found {
 			return data, true
 		}
 		buf := s.segments(prov, st, rend)
-		if len(buf.Items) > 0 && seq < buf.Items[0].Seq {
+		if len(buf.Items) == 0 {
 			return nil, false
 		}
-		if time.Now().After(deadline) || r.Context().Err() != nil {
+		oldest, newest := buf.Items[0].Seq, buf.Items[len(buf.Items)-1].Seq
+		if seq < oldest || seq > newest+1 {
+			return nil, false
+		}
+		if deadline.IsZero() {
+			deadline = time.Now().Add(time.Duration(buf.Target+1) * time.Second)
+		}
+		if seq <= newest || time.Now().After(deadline) || r.Context().Err() != nil {
 			return nil, false
 		}
 		select {
 		case <-r.Context().Done():
 			return nil, false
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(50 * time.Millisecond):
 		}
 	}
 }

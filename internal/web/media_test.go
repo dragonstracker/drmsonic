@@ -128,3 +128,73 @@ func TestLiveEdgeSegmentWaits(t *testing.T) {
 		t.Fatalf("status %d body %q", rr.Code, rr.Body.String())
 	}
 }
+
+func TestFutureSegmentFailsFast(t *testing.T) {
+	prov := &config.Provider{Id: "channels", Name: "channels", RunningMode: config.RunInternalRemuxer, OutputMode: config.OutDirectHLS}
+	prov.Streams = []config.Stream{{Id: "channel1", Name: "channel1", Mode: config.ModeLive, OnDemand: true}}
+	s := testServer(t, Options{}, nil, prov)
+	s.mgr.Start("channels", "channel1")
+
+	for i := 0; i < 3; i++ {
+		s.media.push("channels", "channel1", "", []byte("seg"), 2, 6)
+	}
+
+	start := time.Now()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/stream/channels/channel1/stream00050.ts", nil)
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status %d", rr.Code)
+	}
+	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
+		t.Fatalf("future segment waited %s", elapsed)
+	}
+}
+
+func TestPlaylistServesWhileFilling(t *testing.T) {
+	prov := &config.Provider{Id: "channels", Name: "channels", RunningMode: config.RunInternalRemuxer, OutputMode: config.OutDirectHLS}
+	prov.Streams = []config.Stream{{Id: "channel1", Name: "channel1", Mode: config.ModeLive, OnDemand: true}}
+	s := testServer(t, Options{}, nil, prov)
+	s.mgr.Start("channels", "channel1")
+	s.media.push("channels", "channel1", "", []byte("seg"), 2, 6)
+
+	start := time.Now()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/stream/channels/channel1/stream.m3u8", nil)
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d", rr.Code)
+	}
+	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
+		t.Fatalf("playlist with one segment waited %s", elapsed)
+	}
+	if !strings.Contains(rr.Body.String(), "stream00000.ts") {
+		t.Fatalf("single segment missing:\n%s", rr.Body.String())
+	}
+}
+
+func TestMediaResponsesAllowCrossOrigin(t *testing.T) {
+	prov := &config.Provider{Id: "channels", Name: "channels", RunningMode: config.RunInternalRemuxer, OutputMode: config.OutDirectHLS}
+	prov.Streams = []config.Stream{{Id: "channel1", Name: "channel1", Mode: config.ModeLive, OnDemand: true}}
+	s := testServer(t, Options{}, nil, prov)
+	s.mgr.Start("channels", "channel1")
+	s.media.push("channels", "channel1", "", []byte("seg"), 2, 6)
+
+	for _, path := range []string{
+		"/stream/channels/channel1/master.m3u8",
+		"/stream/channels/channel1/stream.m3u8",
+		"/stream/channels/channel1/stream00000.ts",
+		"/playlist.m3u",
+		"/app1.conf",
+	} {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Host = "host:7779"
+		s.Handler().ServeHTTP(rr, req)
+		if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+			t.Fatalf("%s: Access-Control-Allow-Origin %q", path, got)
+		}
+	}
+}
