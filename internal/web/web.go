@@ -33,25 +33,25 @@ type Options struct {
 }
 
 type Server struct {
-	opts        Options
-	store       *config.Store
-	mgr         *state.Manager
-	tmpl        *template.Template
-	mux         *http.ServeMux
-	media       *mediaStore
-	run         *channelRuntime
-	sessions    *sessionStore
-	throttle    *loginThrottle
-	staticToken string
-	scriptsDir         string
-	pendingMu          sync.Mutex
-	pending            map[string]*pendingUpdate
-	refreshMu          sync.Mutex
-	lastEventsRefresh  map[string]time.Time
-	refreshBusy        map[string]bool
-	start              time.Time
-	stop               chan struct{}
-	once               sync.Once
+	opts              Options
+	store             *config.Store
+	mgr               *state.Manager
+	tmpl              *template.Template
+	mux               *http.ServeMux
+	media             *mediaStore
+	run               *channelRuntime
+	sessions          *sessionStore
+	throttle          *loginThrottle
+	staticToken       string
+	scriptsDir        string
+	pendingMu         sync.Mutex
+	pending           map[string]*pendingUpdate
+	refreshMu         sync.Mutex
+	lastEventsRefresh map[string]time.Time
+	refreshBusy       map[string]bool
+	start             time.Time
+	stop              chan struct{}
+	once              sync.Once
 }
 
 type Page struct {
@@ -180,16 +180,16 @@ func New(opts Options, store *config.Store, mgr *state.Manager) (*Server, error)
 	}
 
 	s := &Server{
-		opts:        opts,
-		store:       store,
-		mgr:         mgr,
-		tmpl:        tmpl,
-		mux:         http.NewServeMux(),
-		media:       newMediaStore(),
-		run:         newRuntime(),
-		sessions:    newSessionStore(),
-		throttle:    newLoginThrottle(),
-		staticToken: deriveStaticToken(opts.User, opts.Password, opts.SessionSecret),
+		opts:              opts,
+		store:             store,
+		mgr:               mgr,
+		tmpl:              tmpl,
+		mux:               http.NewServeMux(),
+		media:             newMediaStore(),
+		run:               newRuntime(),
+		sessions:          newSessionStore(),
+		throttle:          newLoginThrottle(),
+		staticToken:       deriveStaticToken(opts.User, opts.Password, opts.SessionSecret),
 		scriptsDir:        "scripts",
 		pending:           map[string]*pendingUpdate{},
 		lastEventsRefresh: map[string]time.Time{},
