@@ -31,13 +31,20 @@ func (s *Server) StopAll() {
 }
 
 func (s *Server) Autostart() {
+	now := time.Now().Unix()
 	for _, p := range s.store.Providers() {
 		for i := range p.Streams {
 			st := &p.Streams[i]
-			if st.Autostart {
-				s.startChannel(p, st)
-				log.Printf("autostart %s/%s", p.Id, st.Id)
+			if !st.Autostart {
+				continue
 			}
+			if st.IsEvent && st.Start > 0 {
+				if now < st.Start || (st.End > 0 && now > st.End) {
+					continue
+				}
+			}
+			s.startChannel(p, st)
+			log.Printf("autostart %s/%s", p.Id, st.Id)
 		}
 	}
 }
@@ -271,13 +278,42 @@ func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *confi
 		videoSel = rend
 	}
 
+	manifestURL := st.Manifest
+	keys := append([]string{}, st.Keys...)
+	if strings.TrimSpace(prov.Script) != "" {
+		if st.SessionManifest {
+			if u, err := s.resolveScriptManifest(prov, st); err != nil {
+				log.Printf("%s/%s: manifest script: %v", prov.Id, st.Id, err)
+				if ch.StatusLine == "Starting" {
+					ch.LastError = err.Error()
+					ch.StatusLine = "Manifest script failed"
+				}
+			} else if u != "" {
+				manifestURL = u
+			}
+		}
+		if st.UseCdm {
+			if k, err := s.resolveScriptKeys(prov, st); err != nil {
+				log.Printf("%s/%s: cdm script: %v", prov.Id, st.Id, err)
+				if len(keys) == 0 && (rend == "" || rend == firstRendition(st)) {
+					ch.LastError = err.Error()
+					if ch.StatusLine == "Starting" || ch.StatusLine == "Manifest script failed" {
+						ch.StatusLine = "CDM script failed"
+					}
+				}
+			} else if len(k) > 0 {
+				keys = k
+			}
+		}
+	}
+
 	cfg := pipeline.Config{
 		Name:         st.Name,
-		ManifestURL:  st.Manifest,
+		ManifestURL:  manifestURL,
 		Mode:         st.Mode,
 		Video:        videoSel,
 		Audio:        st.Audio,
-		Keys:         st.Keys,
+		Keys:         keys,
 		UserAgent:    prov.UserAgent,
 		Bind:         bindFor(prov, st),
 		Proxy:        proxyFor(prov, st),

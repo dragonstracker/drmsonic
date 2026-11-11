@@ -397,7 +397,7 @@ func TestRenameUserNewUserName(t *testing.T) {
 
 func TestAddUserDefaultsWebAccess(t *testing.T) {
 	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, nil, sampleProvider("channels"))
-	body := `{"Action":"adduser","Users":[{"Username":"viewer"}]}`
+	body := `{"Action":"adduser","Users":[{"Username":"viewer","Password":"viewerpass"}]}`
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/action", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -409,7 +409,22 @@ func TestAddUserDefaultsWebAccess(t *testing.T) {
 		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
 	}
 	got := s.store.Users()
-	if len(got) != 1 || !got[0].HasWebAccess || got[0].IsAdmin {
+	if len(got) != 1 || !got[0].HasWebAccess || got[0].IsAdmin || got[0].Password != "viewerpass" {
 		t.Fatalf("defaults: %+v", got)
+	}
+}
+
+func TestAddUserRequiresPassword(t *testing.T) {
+	s := testServer(t, Options{User: "admin", Password: "secret", SessionSecret: "x"}, nil, sampleProvider("channels"))
+	body := `{"Action":"adduser","Users":[{"Username":"viewer"}]}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/action", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://example.test")
+	req.Host = "example.test"
+	req.SetBasicAuth("admin", "secret")
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code == 200 {
+		t.Fatal("empty password accepted")
 	}
 }

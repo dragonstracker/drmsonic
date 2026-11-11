@@ -43,9 +43,15 @@ type Server struct {
 	sessions    *sessionStore
 	throttle    *loginThrottle
 	staticToken string
-	start       time.Time
-	stop        chan struct{}
-	once        sync.Once
+	scriptsDir         string
+	pendingMu          sync.Mutex
+	pending            map[string]*pendingUpdate
+	refreshMu          sync.Mutex
+	lastEventsRefresh  map[string]time.Time
+	refreshBusy        map[string]bool
+	start              time.Time
+	stop               chan struct{}
+	once               sync.Once
 }
 
 type Page struct {
@@ -184,11 +190,16 @@ func New(opts Options, store *config.Store, mgr *state.Manager) (*Server, error)
 		sessions:    newSessionStore(),
 		throttle:    newLoginThrottle(),
 		staticToken: deriveStaticToken(opts.User, opts.Password, opts.SessionSecret),
-		start:       time.Now(),
-		stop:        make(chan struct{}),
+		scriptsDir:        "scripts",
+		pending:           map[string]*pendingUpdate{},
+		lastEventsRefresh: map[string]time.Time{},
+		refreshBusy:       map[string]bool{},
+		start:             time.Now(),
+		stop:              make(chan struct{}),
 	}
 	s.routes()
 	go s.onDemandLoop()
+	go s.eventsAutorefreshLoop()
 	return s, nil
 }
 

@@ -46,8 +46,16 @@ textarea {
 }
 
 .modal-header {
-	color: red;
+	color: #111;
 	background-color: white;
+}
+
+.bootbox .modal-title {
+	color: #111;
+}
+
+.bootbox-error .modal-title {
+	color: #c62828;
 }
 
 .modal-body {

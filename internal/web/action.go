@@ -170,13 +170,13 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		s.mgr.BumpGlobal()
 		s.renderJSON(w, "ok")
 	case "channelsupdaterequest":
-		s.renderJSON(w, map[string]any{"Streams": []any{}, "Changes": 0})
+		s.acChannelsUpdateRequest(w, req)
 	case "channelsupdateapply":
-		s.renderJSON(w, "ok")
+		s.acChannelsUpdateApply(w, req)
 	case "eventsrefreshrequest":
-		s.renderJSON(w, map[string]any{"Events": []any{}, "Changes": 0})
+		s.acEventsRefreshRequest(w, req)
 	case "eventsrefreshapply":
-		s.renderJSON(w, "ok")
+		s.acEventsRefreshApply(w, req)
 	case "export":
 		s.acExport(w, req)
 	case "import":
@@ -493,7 +493,7 @@ func (s *Server) acAddProvider(w http.ResponseWriter, req actionRequest) {
 		return
 	}
 	s.mgr.BumpGlobal()
-	s.renderJSON(w, "ok")
+	s.renderJSON(w, p.Id)
 }
 
 func (s *Server) acDeleteProvider(w http.ResponseWriter, req actionRequest) {
@@ -527,6 +527,10 @@ func (s *Server) acRenameProvider(w http.ResponseWriter, req actionRequest) {
 	}
 	name := str(mapGet(req.Raw, "Name"))
 	if name == "" {
+		name = req.ProviderName
+	}
+	if name == "" {
+		http.Error(w, "missing provider name", http.StatusInternalServerError)
 		return
 	}
 	old := p.Id
@@ -543,7 +547,7 @@ func (s *Server) acRenameProvider(w http.ResponseWriter, req actionRequest) {
 		return
 	}
 	s.mgr.BumpGlobal()
-	s.renderJSON(w, "ok")
+	s.renderJSON(w, p.Id)
 }
 
 func (s *Server) acUpdateGlobal(w http.ResponseWriter, req actionRequest) {
@@ -689,11 +693,12 @@ func (s *Server) acAddUser(w http.ResponseWriter, req actionRequest) {
 			return
 		}
 	}
-	pass := str(mapGet(src, "Password"))
-	tok := ""
-	if pass != "" {
-		tok = config.NewStreamToken()
+	pass := strings.TrimSpace(str(mapGet(src, "Password")))
+	if pass == "" {
+		http.Error(w, "password required", http.StatusInternalServerError)
+		return
 	}
+	tok := config.NewStreamToken()
 	isAdmin := false
 	if v, ok := src["IsAdmin"]; ok {
 		isAdmin = boolOf(v)

@@ -507,10 +507,19 @@ function collectUsersFromForm() {
 async function saveUsersClick(e) {
 	e.preventDefault();
 	var noauthEl = document.getElementById('noauth');
+	var users = collectUsersFromForm();
+	for (var i = 0; i < users.length; i++) {
+		var el = document.getElementById('password' + i);
+		var needPass = el && el.getAttribute('placeholder') === 'set password';
+		if (needPass && !(users[i].Password || '').trim()) {
+			showStatusWindow('set a password for user: ' + users[i].Username);
+			return;
+		}
+	}
 	var data = {
 		Action: 'saveusers',
 		NoAuth: !!(noauthEl && noauthEl.checked),
-		Users: collectUsersFromForm()
+		Users: users
 	};
 	let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
 		method: 'POST',
@@ -522,7 +531,6 @@ async function saveUsersClick(e) {
 		showStatusWindow(await response.text());
 		return;
 	}
-	showStatusWindow('Users saved');
 	location.reload();
 }
 
@@ -758,13 +766,17 @@ async function rescanProvidersClick(e) {
 
 async function addProviderFormSubmit(e) {
 	e.preventDefault();
+	var name = document.getElementById('addProviderText').value.trim();
+	if (!name) {
+		return;
+	}
 	data = {
 		Action : "addprovider",
-		ProviderName : document.getElementById('addProviderText').value,
+		ProviderName : name,
 	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
@@ -774,9 +786,10 @@ async function addProviderFormSubmit(e) {
 	text = await response.text();
 	if (!response.ok) {
 		showStatusWindow(text);
-	} else {
-		window.location.href = "/config/" + text
+		return;
 	}
+	var id = JSON.parse(text);
+	window.location.href = "/config/" + id;
 };
 
 // ADD onCLick
@@ -873,9 +886,10 @@ async function renameProviderClick(e) {
 	text = await response.text();
 	if (!response.ok) {
 		showStatusWindow(text);
-	} else {
-		window.location.href = "/config/" + text
+		return;
 	}
+	var id = JSON.parse(text);
+	window.location.href = "/config/" + id;
 };
 
 
@@ -1267,11 +1281,27 @@ async function applyGlobalNetworkClick(e) {
 // ADD onCLick
 async function addUserFormSubmit(e) {
 	e.preventDefault();
+	var name = (document.getElementById('addUserText').value || '').trim();
+	if (!name) {
+		showStatusWindow('missing username');
+		return;
+	}
+	var pass = window.prompt('Password for ' + name, '');
+	if (pass == null) {
+		return;
+	}
+	pass = String(pass).trim();
+	if (!pass) {
+		showStatusWindow('password required');
+		return;
+	}
 	data = {
 		Action : "adduser",
 		Users : [
 			{
-				Username : document.getElementById('addUserText').value,
+				Username : name,
+				Password : pass,
+				HasWebAccess : true,
 			},
 		]
 	}
@@ -1288,9 +1318,9 @@ async function addUserFormSubmit(e) {
 	if (!response.ok) {
 		text = await response.text();
 		showStatusWindow(text);
-	} else {
-		location.reload();
+		return;
 	}
+	location.reload();
 };
 
 async function deleteSelectionClick(e) {
@@ -3222,7 +3252,11 @@ function showErrorLogWindow(e, id) {
 }
 
 function showStatusWindow(error) {
-	bootbox.alert( { title:"Error" , message: '<pre>' + error + '</pre>'});
+	bootbox.alert({
+		title: "Error",
+		message: '<pre>' + error + '</pre>',
+		className: 'bootbox-error'
+	});
 }
 
 function getSelectedIds() {

@@ -195,8 +195,8 @@ Day two: `systemctl restart drmsonic`, `journalctl -u drmsonic -f`, `systemctl s
 Publish a new release from this repo:
 
 ```sh
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.1.4
+git push origin v1.1.4
 ```
 
 GitHub Actions builds the binaries and attaches them to that tag's Release page.

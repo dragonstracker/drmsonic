@@ -8,7 +8,7 @@ import (
 
 const VersionName = "drmsonic"
 
-var VersionTag = "v1.2.0-dev"
+var VersionTag = "v1.1.4"
 
 const (
 	ModeLive   = "live"
