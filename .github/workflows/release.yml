@@ -3,6 +3,7 @@ name: release
 on:
   push:
     tags: ["v*"]
+    branches: [devloper]
 
 permissions:
   contents: write
@@ -23,25 +24,45 @@ jobs:
           go vet ./...
           go test ./...
 
+      - name: version
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "tag=dev" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: build binaries
         run: |
           mkdir -p dist
-          VERSION="${GITHUB_REF_NAME}"
+          VERSION="${{ steps.ver.outputs.version }}"
           LDFLAGS="-s -w -X drmsonic/internal/config.VersionTag=${VERSION}"
           CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o dist/drmsonic-linux-amd64     ./cmd/drmsonic
           CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o dist/drmsonic-linux-arm64     ./cmd/drmsonic
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o dist/drmsonic-windows-amd64.exe ./cmd/drmsonic
           cp deploy/install.sh dist/install.sh
           cp deploy/uninstall.sh dist/uninstall.sh
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            sed -i 's/TAG="${DRMSONIC_TAG:-latest}"/TAG="${DRMSONIC_TAG:-dev}"/' dist/install.sh
+          fi
           cd dist
           sha256sum drmsonic-linux-amd64 drmsonic-linux-arm64 drmsonic-windows-amd64.exe install.sh uninstall.sh > SHA256SUMS
+
 
       - name: publish release
         uses: softprops/action-gh-release@v2
         with:
-          name: drmsonic ${{ github.ref_name }}
+          tag_name: ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: drmsonic ${{ steps.ver.outputs.version }}
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.ver.outputs.prerelease }}
+          make_latest: ${{ steps.ver.outputs.prerelease == 'false' }}
           generate_release_notes: true
           files: |
             dist/drmsonic-linux-amd64
@@ -52,3 +73,19 @@ jobs:
             dist/SHA256SUMS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: point floating tag at this commit
+        if: steps.ver.outputs.tag == 'dev'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/git/refs/tags/dev"
+          code=$(curl -sS -o /tmp/tag.json -w "%{http_code}" -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$api")
+          if [ "$code" = "200" ]; then
+            curl -sS -X PATCH -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+              "$api" -d "{\"sha\":\"${GITHUB_SHA}\",\"force\":true}" >/dev/null
+          else
+            curl -sS -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/refs" \
+              -d "{\"ref\":\"refs/tags/dev\",\"sha\":\"${GITHUB_SHA}\"}" >/dev/null
+          fi

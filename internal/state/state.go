@@ -38,10 +38,11 @@ func (c *Channel) Uptime() time.Duration {
 
 func (c *Channel) StatusText() string {
 	if !c.Running {
-		if c.StatusLine != "" && strings.HasPrefix(c.StatusLine, "Error") {
-			return c.StatusLine
+		switch c.StatusLine {
+		case "", "Starting", "Running", "Waiting for segments":
+			return "Stopped"
 		}
-		return "Stopped"
+		return c.StatusLine
 	}
 	if c.StatusLine == "" || c.StatusLine == "Running" || c.StatusLine == "Starting" {
 		if c.StatusLine == "Starting" {
@@ -54,6 +55,10 @@ func (c *Channel) StatusText() string {
 
 func (c *Channel) Failed() bool {
 	return strings.HasPrefix(c.StatusLine, "Error")
+}
+
+func (c *Channel) Ended() bool {
+	return strings.HasPrefix(c.StatusLine, "Broadcast ended")
 }
 
 func shortDuration(d time.Duration) string {
@@ -278,8 +283,15 @@ func BuildStatus(store *config.Store, m *Manager, baseURL string) StatusResponse
 				if ch.Info != "" {
 					ss.StreamInfo = ch.Info
 				}
-				if ch.Running && !ch.Failed() {
+				switch {
+				case ch.Failed():
+					ss.StatusColor = "red"
+				case ch.Ended():
+					ss.StatusColor = "orange"
+				case ch.Running:
 					ss.StatusColor = "green"
+				default:
+					ss.StatusColor = "white"
 				}
 			}
 			ps.Streams = append(ps.Streams, ss)

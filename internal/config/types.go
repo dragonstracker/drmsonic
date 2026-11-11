@@ -1,10 +1,14 @@
 package config
 
-import "strings"
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"strings"
+)
 
 const VersionName = "drmsonic"
 
-var VersionTag = "v1.0.0"
+var VersionTag = "v1.1.4"
 
 const (
 	ModeLive   = "live"
@@ -247,10 +251,16 @@ func (p *Provider) EffectiveOutputMode() string {
 type User struct {
 	Username     string   `json:"Username"`
 	Password     string   `json:"Password"`
+	StreamToken  string   `json:"StreamToken"`
 	ProviderIds  []string `json:"ProviderIds"`
 	Network      string   `json:"Network"`
 	IsAdmin      bool     `json:"IsAdmin"`
 	HasWebAccess bool     `json:"HasWebAccess"`
+	NoPlaylist   bool     `json:"NoPlaylist,omitempty"`
+}
+
+func (u User) CanUsePlaylist() bool {
+	return !u.NoPlaylist
 }
 
 func (u User) NetworkList() []string {
@@ -263,8 +273,55 @@ func (u User) NetworkList() []string {
 	return out
 }
 
+func NewStreamToken() string {
+	var b [24]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return hex.EncodeToString([]byte("fallback-token-needs-entropy"))
+	}
+	return hex.EncodeToString(b[:])
+}
+
+func EnsureUserTokens(users []User) ([]User, bool) {
+	changed := false
+	for i := range users {
+		if users[i].StreamToken == "" && users[i].Password != "" {
+			users[i].StreamToken = NewStreamToken()
+			changed = true
+		}
+	}
+	return users, changed
+}
+
+func EnsureDefaultAdmin(users []User) ([]User, bool) {
+	for _, u := range users {
+		if u.Password != "" {
+			return users, false
+		}
+	}
+	for i := range users {
+		if users[i].Username != "admin" {
+			continue
+		}
+		users[i].Password = "admin"
+		users[i].IsAdmin = true
+		users[i].HasWebAccess = true
+		if users[i].StreamToken == "" {
+			users[i].StreamToken = NewStreamToken()
+		}
+		return users, true
+	}
+	return append(users, User{
+		Username:     "admin",
+		Password:     "admin",
+		IsAdmin:      true,
+		HasWebAccess: true,
+		StreamToken:  NewStreamToken(),
+	}), true
+}
+
 type Config struct {
-	Users []User `json:"Users"`
+	Users  []User `json:"Users"`
+	NoAuth bool   `json:"NoAuth,omitempty"`
 }
 
 type Recording struct {

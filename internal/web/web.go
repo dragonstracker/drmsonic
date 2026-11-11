@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -17,29 +18,40 @@ import (
 )
 
 type Options struct {
-	Bind        string
-	Port        int
-	BaseURL     string
-	Allow       string
-	User        string
-	Password    string
-	Providers   string
-	NoAutostart bool
-	AccessLog   bool
+	Bind           string
+	Port           int
+	BaseURL        string
+	Allow          string
+	User           string
+	Password       string
+	SessionSecret  string
+	TrustedProxies string
+	Providers      string
+	NoAutostart    bool
+	AccessLog      bool
+	AllowPrivate   bool
 }
 
 type Server struct {
-	opts   Options
-	store  *config.Store
-	mgr    *state.Manager
-	tmpl   *template.Template
-	mux    *http.ServeMux
-	static http.Handler
-	media  *mediaStore
-	run    *channelRuntime
-	start  time.Time
-	stop   chan struct{}
-	once   sync.Once
+	opts              Options
+	store             *config.Store
+	mgr               *state.Manager
+	tmpl              *template.Template
+	mux               *http.ServeMux
+	media             *mediaStore
+	run               *channelRuntime
+	sessions          *sessionStore
+	throttle          *loginThrottle
+	staticToken       string
+	scriptsDir        string
+	pendingMu         sync.Mutex
+	pending           map[string]*pendingUpdate
+	refreshMu         sync.Mutex
+	lastEventsRefresh map[string]time.Time
+	refreshBusy       map[string]bool
+	start             time.Time
+	stop              chan struct{}
+	once              sync.Once
 }
 
 type Page struct {
@@ -52,6 +64,7 @@ type Page struct {
 	LoggedIn   bool
 
 	Providers       []*config.Provider
+	StreamTables    []*config.Provider
 	Provider        *config.Provider
 	ProviderId      string
 	Streams         []config.Stream
@@ -59,6 +72,7 @@ type Page struct {
 	InternalUdpOnly bool
 	Status          state.StatusResponse
 	Users           []config.User
+	NoAuth          bool
 	Recordings      []config.Recording
 	Replays         []config.Recording
 	Events          []EventRow
@@ -156,7 +170,8 @@ func New(opts Options, store *config.Store, mgr *state.Manager) (*Server, error)
 			}
 			return false
 		},
-		"fmtSize": func(n int) string { return fmt.Sprintf("%d", n) },
+		"fmtSize":    func(n int) string { return fmt.Sprintf("%d", n) },
+		"pathEscape": url.PathEscape,
 	}
 
 	tmpl, err := template.New("root").Funcs(funcs).ParseFS(ui.Templates(), "*.html")
@@ -165,19 +180,26 @@ func New(opts Options, store *config.Store, mgr *state.Manager) (*Server, error)
 	}
 
 	s := &Server{
-		opts:   opts,
-		store:  store,
-		mgr:    mgr,
-		tmpl:   tmpl,
-		mux:    http.NewServeMux(),
-		static: http.FileServer(http.FS(ui.Static())),
-		media:  newMediaStore(),
-		run:    newRuntime(),
-		start:  time.Now(),
-		stop:   make(chan struct{}),
+		opts:              opts,
+		store:             store,
+		mgr:               mgr,
+		tmpl:              tmpl,
+		mux:               http.NewServeMux(),
+		media:             newMediaStore(),
+		run:               newRuntime(),
+		sessions:          newSessionStore(),
+		throttle:          newLoginThrottle(),
+		staticToken:       deriveStaticToken(opts.User, opts.Password, opts.SessionSecret),
+		scriptsDir:        "scripts",
+		pending:           map[string]*pendingUpdate{},
+		lastEventsRefresh: map[string]time.Time{},
+		refreshBusy:       map[string]bool{},
+		start:             time.Now(),
+		stop:              make(chan struct{}),
 	}
 	s.routes()
 	go s.onDemandLoop()
+	go s.eventsAutorefreshLoop()
 	return s, nil
 }
 
@@ -192,28 +214,31 @@ func (s *Server) ShutdownSignal() <-chan struct{} {
 func (s *Server) routes() {
 	m := s.mux
 
-	m.HandleFunc("GET /static/", func(w http.ResponseWriter, r *http.Request) {
-		http.StripPrefix("/static/", s.static).ServeHTTP(w, r)
-	})
+	m.HandleFunc("GET /static/", newStaticHandler(ui.Static()).ServeHTTP)
+
+	m.HandleFunc("GET /login", s.handleLogin)
+	m.HandleFunc("POST /login", s.handleLogin)
+	m.HandleFunc("POST /logout", s.handleLogout)
+	m.HandleFunc("GET /logout", s.handleLogout)
 
 	m.HandleFunc("POST /api/action", s.handleAction)
 
-	m.HandleFunc("GET /{$}", s.handleIndex)
-	m.HandleFunc("GET /providers", s.handleIndex)
-	m.HandleFunc("GET /help", s.handleHelp)
-	m.HandleFunc("GET /monitoring", s.handleMonitoring)
-	m.HandleFunc("GET /users", s.handleUsers)
-	m.HandleFunc("GET /rec", s.handleRecordings)
-	m.HandleFunc("GET /records", s.handleRecordings)
-	m.HandleFunc("GET /debug", s.handleDebug)
-	m.HandleFunc("GET /debug/pprof/", s.handleDebug)
+	m.HandleFunc("GET /{$}", s.requirePanel(s.handleIndex))
+	m.HandleFunc("GET /providers", s.requirePanel(s.handleIndex))
+	m.HandleFunc("GET /help", s.requirePanel(s.handleHelp))
+	m.HandleFunc("GET /monitoring", s.requirePanel(s.handleMonitoring))
+	m.HandleFunc("GET /users", s.requireAdmin(s.handleUsers))
+	m.HandleFunc("GET /rec", s.requirePanel(s.handleRecordings))
+	m.HandleFunc("GET /records", s.requirePanel(s.handleRecordings))
+	m.HandleFunc("GET /debug", s.requireAdmin(s.handleDebug))
+	m.HandleFunc("GET /debug/pprof/", s.requireAdmin(s.handleDebug))
 
-	m.HandleFunc("GET /status", s.handleStatusIndex)
-	m.HandleFunc("GET /status/{provider}", s.handleStatus)
-	m.HandleFunc("GET /events", s.handleEventsIndex)
-	m.HandleFunc("GET /events/{provider}", s.handleEvents)
-	m.HandleFunc("GET /config", s.handleConfigIndex)
-	m.HandleFunc("GET /config/{provider}", s.handleConfig)
+	m.HandleFunc("GET /status", s.requirePanel(s.handleStatusIndex))
+	m.HandleFunc("GET /status/{provider}", s.requirePanel(s.handleStatus))
+	m.HandleFunc("GET /events", s.requirePanel(s.handleEventsIndex))
+	m.HandleFunc("GET /events/{provider}", s.requirePanel(s.handleEvents))
+	m.HandleFunc("GET /config", s.requireAdmin(s.handleConfigIndex))
+	m.HandleFunc("GET /config/{provider}", s.requireAdmin(s.handleConfig))
 
 	m.HandleFunc("GET /playlist.m3u", s.handleM3U("all"))
 	m.HandleFunc("GET /live.m3u", s.handleM3U("live"))
@@ -221,6 +246,8 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /replay.m3u", s.handleM3U("replay"))
 	m.HandleFunc("GET /app1.conf", s.handleApp1)
 
+	m.HandleFunc("GET /stream/{provider}/{stream}/v/{rend}/stream.m3u8", s.handleMediaPlaylist)
+	m.HandleFunc("GET /stream/{provider}/{stream}/v/{rend}/{file}", s.handleSegment)
 	m.HandleFunc("GET /stream/{provider}/{stream}/master.m3u8", s.handleMasterPlaylist)
 	m.HandleFunc("GET /stream/{provider}/{stream}/stream.m3u8", s.handleMediaPlaylist)
 	m.HandleFunc("GET /stream/{provider}/{stream}/{file}", s.handleSegment)
@@ -229,13 +256,17 @@ func (s *Server) routes() {
 }
 
 func (s *Server) Handler() http.Handler {
-	return s.logWrap(s.authWrap(s.mux))
+	return s.logWrap(gzipDynamic(s.pathAuthRewrite(s.authWrap(s.mux))))
 }
 
 func (s *Server) logWrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.opts.AccessLog {
-			log.Printf("%s %s %s", remoteIP(r), r.Method, r.URL.Path)
+			path := r.URL.Path
+			if parts := splitPath(path); len(parts) >= 3 && parts[2] == "stream" {
+				path = "/****/****/" + strings.Join(parts[2:], "/")
+			}
+			log.Printf("%s %s %s", clientIP(r, s.opts.TrustedProxies), r.Method, path)
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -253,6 +284,7 @@ func (s *Server) ListenAndServe() error {
 
 func (s *Server) basePage(r *http.Request) Page {
 	u, ok := s.currentUser(r)
+	providers := s.visibleProviders(r)
 	p := Page{
 		Version:      config.VersionName,
 		Tag:          config.VersionTag,
@@ -261,9 +293,9 @@ func (s *Server) basePage(r *http.Request) Page {
 		OutputModes:  config.OutputModes,
 		CdmTypes:     []string{config.CdmWidevine, config.CdmPlayReady, config.CdmVerimatrix},
 		ModeNames:    []string{config.ModeLive, config.ModeReplay, config.ModeVOD},
-		Providers:    s.store.Providers(),
+		Providers:    providers,
 	}
-	for _, prov := range s.store.Providers() {
+	for _, prov := range providers {
 		p.StreamsCount += len(prov.Streams)
 	}
 	if ok {
@@ -322,12 +354,4 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.handleIndex(w, r)
-}
-
-func remoteIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

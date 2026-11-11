@@ -11,10 +11,12 @@
 						</div>
 						<input class="form control" placeholder="user name" aria-label="user name"  id="addUserText" type="text" value="" />
 					</div>
-
 				</form>
-				<br>
-				<input type="submit" style="width:150px" class="btn btn-primary btn-sm" value="SAVE USERS" id="saveusers"/>
+				<div class="form-check" style="margin-bottom: 12px;">
+					<input class="form-check-input" type="checkbox" id="noauth" {{ if .NoAuth }} checked {{ end }}/>
+					<label class="form-check-label" for="noauth">Open panel without login</label>
+				</div>
+				<input type="button" style="width:150px" class="btn btn-primary btn-sm" value="SAVE USERS" id="saveusers"/>
 				<br>
 			</div>
 		</div>
@@ -38,13 +40,13 @@
 					</TD>
 					<TD style='text-align:center; vertical-align:middle; width:250px'>
 						<div id="passwordDiv{{$n}}">
-							<input class="form-control" placeholder="password" aria-label="password" id="password{{$n}}" type="text" value="hidden"/>
+							<input class="form-control" placeholder="{{ if $s.Password }}leave blank to keep{{ else }}set password{{ end }}" aria-label="password" id="password{{$n}}" type="password" value=""/>
 						</div>
 					</TD>
 					<TD style='text-align:center; vertical-align:middle; width:250px'>
-						<select class="selectpicker" multiple aria-label="size 2 select example" id="userProviders{{$n}}">
+						<select class="selectpicker" multiple data-width="100%" id="userProviders{{$n}}">
 							{{range $m, $p := $.Providers}}
-							<option value="{{$p.Id}}">{{$p.Name}}</option>
+							<option value="{{$p.Id}}" {{range $x, $pid := $s.ProviderIds}}{{ if eq $pid $p.Id }} selected {{ end }}{{end}}>{{$p.Name}}</option>
 							{{end}}
 						</select>
 					</TD>
@@ -62,6 +64,10 @@
 							<input class="form-check-input" type="checkbox" id="haswebaccess{{$n}}" {{ if $s.HasWebAccess }} checked {{ end }}/>
 							<label class="form-check-label" for="haswebaccess{{$n}}">Web Access</label>
 						</div>
+						<div class="form-check" id="playlistDiv{{$n}}">
+							<input class="form-check-input" type="checkbox" id="playlist{{$n}}" {{ if $s.CanUsePlaylist }} checked {{ end }}/>
+							<label class="form-check-label" for="playlist{{$n}}">Playlist</label>
+						</div>
 					</TD>
 					<TD style='text-align:center; vertical-align:middle; width:100px'>
 						<div style="display: flex;">
@@ -70,62 +76,42 @@
 									PLAYLIST
 								</button>
 								<ul class="dropdown-menu">
-									<li><a class="dropdown-item" href="playlist.m3u?user={{$s.Username}}">Full</a></li>
-									<li><a class="dropdown-item" href="live.m3u?user={{$s.Username}}">Live</a></li>
-									<li><a class="dropdown-item" href="event.m3u?user={{$s.Username}}">Events</a></li>
-									<li><a class="dropdown-item" href="replay.m3u?user={{$s.Username}}">Replays</a></li>
-									<li><a class="dropdown-item" href="app1.conf?user={{$s.Username}}">App1</a></li>
+									{{ if not $s.CanUsePlaylist }}
+									<li><span class="dropdown-item disabled">Playlist access disabled</span></li>
+									{{ else if $s.Password }}
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/playlist.m3u">Full</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/live.m3u">Live</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/event.m3u">Events</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/replay.m3u">Replays</a></li>
+									<li><a class="dropdown-item" href="{{pathEscape $s.Username}}/{{pathEscape $s.Password}}/app1.conf">App1</a></li>
+									{{ else }}
+									<li><span class="dropdown-item disabled">Set a password to unlock links</span></li>
+									{{ end }}
 								</ul>
 							</div>
 							&nbsp;&nbsp;
-							<input type="button" class="btn btn-primary" id="renameuser{{$n}}" value="RENAME" />
+							<input type="button" class="btn btn-primary" data-user-action="rename" data-user-index="{{$n}}" value="RENAME" />
 							&nbsp;&nbsp;
-							<input type="button" class="btn btn-primary" id="deleteuser{{$n}}" value="DELETE" />
+							<input type="button" class="btn btn-primary" data-user-action="delete" data-user-index="{{$n}}" value="DELETE" />
 						</div>
 					</TD>
-
 				</TR>
 				{{ end }}
-
 			</tbody>
 		</table>
 
 		<script type="text/javascript">
 			document.getElementById('usersbutton').style.backgroundColor = 'darkblue';
 
-			addUserForm.onsubmit = addUserFormSubmit;
-			saveusers.onclick = saveClick;
+			document.getElementById('addUserForm').onsubmit = addUserFormSubmit;
+			document.getElementById('saveusers').onclick = saveUsersClick;
+			document.getElementById('usersTable').addEventListener('click', usersTableClick);
 
-			var intervalId = null;
-			var PChangeCounter = new Object();
-			var GlobalChangeCounter = -2;
-
-			{{range $n, $c := .Users}}
-				passwordDiv{{$n}}.onchange = updateUser;
-				networkDiv{{$n}}.onchange = updateUser;
-				userProviders{{$n}}.onchange = updateUser;
-				isadminDiv{{$n}}.onchange = updateUser;
-				haswebaccessDiv{{$n}}.onchange = updateUser;
-				deleteuser{{$n}}.onclick = deleteUserClick;
-				renameuser{{$n}}.onclick = renameUserClick;
-
-				var picker = document.getElementById('userProviders{{$n}}')
-				for (i=0; i<picker.length; i++) {
-					{{range $m, $p := .ProviderIds}}
-						if ('{{$p}}' == picker[i].value) {
-							picker[i].selected = true
-						}
-					{{end}}
-				}
-			{{end}}
-
-			var usersTable = $('#usersTable').removeAttr('width').DataTable( {
-								"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
-								"autoWidth": false
-						});
-
+			var usersTable = $('#usersTable').removeAttr('width').DataTable({
+				"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
+				"autoWidth": false
+			});
+			$('.selectpicker').selectpicker();
 		</script>
-
 	</body>
-
 </html>

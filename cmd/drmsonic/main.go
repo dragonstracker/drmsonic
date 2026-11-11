@@ -15,26 +15,33 @@ import (
 
 func main() {
 	var (
-		port        = flag.Int("p", 7779, "Http port to listen to.")
-		bind        = flag.String("b", "0.0.0.0", "Http bind adress.")
-		baseURL     = flag.String("baseurl", "", "Http base URL.")
-		providers   = flag.String("providers", "providers", "Providers path, default is 'providers/'.")
-		confFile    = flag.String("c", "drmsonic.json", "Config file.")
-		user        = flag.String("user", "", "Static admin user.")
-		password    = flag.String("password", "", "Static admin password.")
-		allow       = flag.String("allow", "", "List of no-auth admin source ip addresses.")
-		logFile     = flag.String("l", "", "Log file")
-		verbose     = flag.Int("v", 0, "Verbose logs (1=verbose, 2=debug, 3=trace).")
-		noautostart = flag.Bool("noautostart", false, "Disable autostart.")
-		accessLog   = flag.Bool("accesslog", false, "Log every http request.")
-		version     = flag.Bool("version", false, "Print version and exit.")
-		path        = flag.String("path", "", "Working directory. All subpath will be created there.")
+		port           = flag.Int("p", 7779, "Http port to listen to.")
+		bind           = flag.String("b", "0.0.0.0", "Http bind adress.")
+		baseURL        = flag.String("baseurl", "", "Http base URL.")
+		providers      = flag.String("providers", "providers", "Providers path, default is 'providers/'.")
+		confFile       = flag.String("c", "drmsonic.json", "Config file.")
+		user           = flag.String("user", "", "Static admin user.")
+		password       = flag.String("password", "", "Static admin password.")
+		sessionSecret  = flag.String("session-secret", "", "Secret for static stream token and sessions.")
+		allow          = flag.String("allow", "", "List of no-auth admin source ip addresses.")
+		trustedProxies = flag.String("trusted-proxies", "", "Proxies allowed to set X-Forwarded-For.")
+		allowPrivate   = flag.Bool("allow-private-fetch", false, "Allow fetch of private/loopback URLs.")
+		logFile        = flag.String("l", "", "Log file")
+		verbose        = flag.Int("v", 0, "Verbose logs (1=verbose, 2=debug, 3=trace).")
+		noautostart    = flag.Bool("noautostart", false, "Disable autostart.")
+		accessLog      = flag.Bool("accesslog", false, "Log every http request.")
+		version        = flag.Bool("version", false, "Print version and exit.")
+		path           = flag.String("path", "", "Working directory. All subpath will be created there.")
 	)
 	flag.Parse()
 
 	if *version {
 		fmt.Printf("%s %s\n", config.VersionName, config.VersionTag)
 		return
+	}
+
+	if (*user == "") != (*password == "") {
+		log.Fatal("both -user and -password are required together, or neither")
 	}
 
 	if *path != "" {
@@ -58,19 +65,31 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+	if *user == "" {
+		created, err := store.EnsureDefaultAdmin()
+		if err != nil {
+			log.Fatalf("default admin: %v", err)
+		}
+		if created {
+			log.Printf("default login: admin / admin (change under Users)")
+		}
+	}
 
 	mgr := state.NewManager()
 
 	opts := web.Options{
-		Bind:        *bind,
-		Port:        *port,
-		BaseURL:     *baseURL,
-		Allow:       *allow,
-		User:        *user,
-		Password:    *password,
-		Providers:   *providers,
-		NoAutostart: *noautostart,
-		AccessLog:   *accessLog,
+		Bind:           *bind,
+		Port:           *port,
+		BaseURL:        *baseURL,
+		Allow:          *allow,
+		User:           *user,
+		Password:       *password,
+		SessionSecret:  *sessionSecret,
+		TrustedProxies: *trustedProxies,
+		AllowPrivate:   *allowPrivate,
+		Providers:      *providers,
+		NoAutostart:    *noautostart,
+		AccessLog:      *accessLog,
 	}
 
 	srv, err := web.New(opts, store, mgr)

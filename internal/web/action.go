@@ -23,6 +23,28 @@ type actionRequest struct {
 	Raw          map[string]any   `json:"-"`
 }
 
+const maxActionBody = 16 << 20
+
+func (s *Server) actionAllowed(r *http.Request, action string) bool {
+	u, ok := s.currentUser(r)
+	if !ok {
+		return !s.authEnabled()
+	}
+	if u.IsAdmin {
+		return true
+	}
+	if !u.HasWebAccess {
+		return false
+	}
+	switch action {
+	case "getstatus", "getconf", "getmonitoring", "getrecordings", "getreplays", "getevents",
+		"start", "stop", "restart", "refresh", "refreshkeys", "flushkeys":
+		return true
+	default:
+		return false
+	}
+}
+
 func (r *actionRequest) userPayload() map[string]any {
 	if r.User != nil {
 		return r.User
@@ -38,9 +60,18 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid action", http.StatusInternalServerError)
 		return
 	}
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/json") {
+		http.Error(w, "unsupported media type", http.StatusUnsupportedMediaType)
+		return
+	}
+	if !s.csrfOK(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 
 	var raw map[string]any
-	dec := json.NewDecoder(r.Body)
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxActionBody))
 	dec.UseNumber()
 	if err := dec.Decode(&raw); err != nil {
 		http.Error(w, "bad request body", http.StatusInternalServerError)
@@ -74,6 +105,10 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 
 	if req.Action == "" {
 		http.Error(w, "invalid action", http.StatusInternalServerError)
+		return
+	}
+	if !s.actionAllowed(r, req.Action) {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -123,6 +158,8 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		s.acAddUser(w, req)
 	case "updateuser":
 		s.acUpdateUser(w, req)
+	case "saveusers":
+		s.acSaveUsers(w, req)
 	case "deleteuser":
 		s.acDeleteUser(w, req)
 	case "renameuser":
@@ -133,13 +170,13 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		s.mgr.BumpGlobal()
 		s.renderJSON(w, "ok")
 	case "channelsupdaterequest":
-		s.renderJSON(w, map[string]any{"Streams": []any{}, "Changes": 0})
+		s.acChannelsUpdateRequest(w, req)
 	case "channelsupdateapply":
-		s.renderJSON(w, "ok")
+		s.acChannelsUpdateApply(w, req)
 	case "eventsrefreshrequest":
-		s.renderJSON(w, map[string]any{"Events": []any{}, "Changes": 0})
+		s.acEventsRefreshRequest(w, req)
 	case "eventsrefreshapply":
-		s.renderJSON(w, "ok")
+		s.acEventsRefreshApply(w, req)
 	case "export":
 		s.acExport(w, req)
 	case "import":
@@ -243,6 +280,21 @@ func (s *Server) acGetMonitoring(w http.ResponseWriter, req actionRequest) {
 }
 
 func (s *Server) acSave(w http.ResponseWriter, req actionRequest) {
+	if req.ProviderId == "" {
+		for _, p := range s.store.Providers() {
+			if err := s.store.Put(p); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		if err := s.store.SaveUsers(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.mgr.BumpGlobal()
+		s.renderJSON(w, "ok")
+		return
+	}
 	p := s.providerOrError(w, req.ProviderId)
 	if p == nil {
 		return
@@ -441,7 +493,7 @@ func (s *Server) acAddProvider(w http.ResponseWriter, req actionRequest) {
 		return
 	}
 	s.mgr.BumpGlobal()
-	s.renderJSON(w, "ok")
+	s.renderJSON(w, p.Id)
 }
 
 func (s *Server) acDeleteProvider(w http.ResponseWriter, req actionRequest) {
@@ -475,6 +527,10 @@ func (s *Server) acRenameProvider(w http.ResponseWriter, req actionRequest) {
 	}
 	name := str(mapGet(req.Raw, "Name"))
 	if name == "" {
+		name = req.ProviderName
+	}
+	if name == "" {
+		http.Error(w, "missing provider name", http.StatusInternalServerError)
 		return
 	}
 	old := p.Id
@@ -491,7 +547,7 @@ func (s *Server) acRenameProvider(w http.ResponseWriter, req actionRequest) {
 		return
 	}
 	s.mgr.BumpGlobal()
-	s.renderJSON(w, "ok")
+	s.renderJSON(w, p.Id)
 }
 
 func (s *Server) acUpdateGlobal(w http.ResponseWriter, req actionRequest) {
@@ -637,11 +693,32 @@ func (s *Server) acAddUser(w http.ResponseWriter, req actionRequest) {
 			return
 		}
 	}
+	pass := strings.TrimSpace(str(mapGet(src, "Password")))
+	if pass == "" {
+		http.Error(w, "password required", http.StatusInternalServerError)
+		return
+	}
+	tok := config.NewStreamToken()
+	isAdmin := false
+	if v, ok := src["IsAdmin"]; ok {
+		isAdmin = boolOf(v)
+	}
+	hasWeb := true
+	if v, ok := src["HasWebAccess"]; ok {
+		hasWeb = boolOf(v)
+	}
+	noPlaylist := false
+	if v, ok := src["NoPlaylist"]; ok {
+		noPlaylist = boolOf(v)
+	}
 	users = append(users, config.User{
 		Username:     name,
-		Password:     str(mapGet(src, "Password")),
-		IsAdmin:      boolOf(mapGet(src, "IsAdmin")),
-		HasWebAccess: boolOf(mapGet(src, "HasWebAccess")),
+		Password:     pass,
+		StreamToken:  tok,
+		IsAdmin:      isAdmin,
+		HasWebAccess: hasWeb,
+		NoPlaylist:   noPlaylist,
+		ProviderIds:  stringSlice(mapGet(src, "ProviderIds")),
 	})
 	s.store.SetUsers(users)
 	if err := s.store.SaveUsers(); err != nil {
@@ -651,9 +728,42 @@ func (s *Server) acAddUser(w http.ResponseWriter, req actionRequest) {
 	s.renderJSON(w, "ok")
 }
 
+func applyUserFields(u *config.User, src map[string]any) {
+	if v, ok := src["Password"]; ok {
+		if pass := str(v); pass != "" && pass != "hidden" {
+			u.Password = pass
+			if u.StreamToken == "" {
+				u.StreamToken = config.NewStreamToken()
+			}
+		}
+	}
+	if u.Password != "" && u.StreamToken == "" {
+		u.StreamToken = config.NewStreamToken()
+	}
+	if v, ok := src["IsAdmin"]; ok {
+		u.IsAdmin = boolOf(v)
+	}
+	if v, ok := src["HasWebAccess"]; ok {
+		u.HasWebAccess = boolOf(v)
+	}
+	if v, ok := src["NoPlaylist"]; ok {
+		u.NoPlaylist = boolOf(v)
+	}
+	if v, ok := src["ProviderIds"]; ok {
+		u.ProviderIds = stringSlice(v)
+	}
+	if v, ok := src["Network"]; ok {
+		u.Network = str(v)
+	}
+}
+
 func (s *Server) acUpdateUser(w http.ResponseWriter, req actionRequest) {
 	src := req.userPayload()
-	name := str(mapGet(src, "Username"))
+	name := strings.TrimSpace(str(mapGet(src, "Username")))
+	if name == "" {
+		http.Error(w, "username required", http.StatusInternalServerError)
+		return
+	}
 	users := s.store.Users()
 	found := false
 	for i := range users {
@@ -661,25 +771,41 @@ func (s *Server) acUpdateUser(w http.ResponseWriter, req actionRequest) {
 			continue
 		}
 		found = true
-		if v, ok := src["Password"]; ok {
-			users[i].Password = str(v)
-		}
-		if v, ok := src["IsAdmin"]; ok {
-			users[i].IsAdmin = boolOf(v)
-		}
-		if v, ok := src["HasWebAccess"]; ok {
-			users[i].HasWebAccess = boolOf(v)
-		}
-		if v, ok := src["ProviderIds"]; ok {
-			users[i].ProviderIds = stringSlice(v)
-		}
-		if v, ok := src["Network"]; ok {
-			users[i].Network = str(v)
-		}
+		applyUserFields(&users[i], src)
+		break
 	}
 	if !found {
 		http.Error(w, "unknown user", http.StatusInternalServerError)
 		return
+	}
+	s.store.SetUsers(users)
+	if err := s.store.SaveUsers(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.renderJSON(w, "ok")
+}
+
+func (s *Server) acSaveUsers(w http.ResponseWriter, req actionRequest) {
+	users := s.store.Users()
+	index := make(map[string]int, len(users))
+	for i := range users {
+		index[users[i].Username] = i
+	}
+	for _, src := range req.Users {
+		name := strings.TrimSpace(str(mapGet(src, "Username")))
+		if name == "" {
+			continue
+		}
+		i, ok := index[name]
+		if !ok {
+			http.Error(w, "unknown user: "+name, http.StatusInternalServerError)
+			return
+		}
+		applyUserFields(&users[i], src)
+	}
+	if v, ok := req.Raw["NoAuth"]; ok {
+		s.store.SetNoAuth(boolOf(v))
 	}
 	s.store.SetUsers(users)
 	if err := s.store.SaveUsers(); err != nil {
@@ -723,13 +849,33 @@ func (s *Server) acRenameUser(w http.ResponseWriter, req actionRequest) {
 		name = str(mapGet(req.Raw, "NewUsername"))
 	}
 	if name == "" {
-		name = str(mapGet(req.userPayload(), "Username"))
+		name = str(mapGet(req.Raw, "NewUserName"))
+	}
+	if name == "" || old == "" {
+		http.Error(w, "missing username", http.StatusInternalServerError)
+		return
+	}
+	if name == old {
+		s.renderJSON(w, "ok")
+		return
 	}
 	users := s.store.Users()
+	found := false
+	for i := range users {
+		if users[i].Username == name {
+			http.Error(w, "user already exists", http.StatusInternalServerError)
+			return
+		}
+	}
 	for i := range users {
 		if users[i].Username == old {
 			users[i].Username = name
+			found = true
 		}
+	}
+	if !found {
+		http.Error(w, "unknown user", http.StatusInternalServerError)
+		return
 	}
 	s.store.SetUsers(users)
 	if err := s.store.SaveUsers(); err != nil {
@@ -757,18 +903,21 @@ func (s *Server) acExport(w http.ResponseWriter, req actionRequest) {
 }
 
 func (s *Server) acImport(w http.ResponseWriter, req actionRequest) {
-	body, ok := req.Raw["Body"].(map[string]any)
-	if !ok {
-		http.Error(w, "invalid import body", http.StatusInternalServerError)
-		return
-	}
-	p := &config.Provider{}
-	raw, _ := json.Marshal(body)
-	if err := json.Unmarshal(raw, p); err != nil {
+	body, err := importBody(req.Raw)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if name := str(mapGet(req.Raw, "Name")); name != "" {
+	p, err := providerFromBody(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	name := req.ProviderName
+	if name == "" {
+		name = p.Name
+	}
+	if name != "" {
 		p.Name = name
 		p.Id = config.Slug(name)
 	}

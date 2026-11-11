@@ -116,7 +116,7 @@
 			{{range $n, $r := .Recordings}}
 
 				document.getElementById('recstreamname{{$n}}').href = '{{$r.StreamingUrl}}';
-				recstreamname{{$n}}.onclick = setPlayer;
+				document.getElementById('recstreamname{{$n}}').onclick = setPlayer;
 
 				localStart = new Date('{{$r.Start}}');
 				localEnd = new Date('{{$r.End}}');

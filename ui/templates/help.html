@@ -89,7 +89,7 @@
 			<li ><strong><em>Status</em></strong>: the status of the stream.</li>
 			<li ><strong><em>Mode</em></strong>: <strong>Live</strong>, <strong>Replay</strong> or <strong>VOD</strong>. <strong>Live</strong> mode is for a live channel. <strong>Replay</strong> will trigger a fetch of all the fragments from the manifest and generate a HLS output stream. <strong>VOD</strong> can be used to get VOD streamd and generate mp4 file.</li>
 			<li ><strong><em>Manifest</em></strong>: setup the manifest url and/or provider script params get a dynamic manifest (the <code>SessionManifest</code> option must be selected, please check the <strong>Scripts</strong> section for more details). Network ovverride fields will also appear in the box when the <code>NetworkOverride</code> option is selected. Press the <code>R</code> button to parse the manifest and refresh the tracks list.</li>
-			<li ><strong><em>Tracks</em></strong>: list of selectable Video/Audio/Subtitles tracks. Only one Video track can be selected. The <strong>Best quality</strong> option is seletected by default and let DRMSONIC take the best resolution/bandwidth/framrate. Multiple audio and subtiltes tracks can be selected.</li>
+			<li ><strong><em>Tracks</em></strong>: Video — <strong>Best quality</strong> (default) remuxes the highest bandwidth; <strong>All qualities</strong> remuxes every video track into an ABR master playlist; pick a listed id to lock one track. Audio/subtitles support multi-select.</li>
 			<li ><strong><em>Keys or CDM Script</em></strong>: set the decryption keys for the stream. On line per kid:key. If <code>UseCdm</code>, DRMSONIC will try to call the selected provider script to get keys using the specified parametersm. Please check the <strong>Scripts</strong> section for more detail.</li>
 			<li ><strong><em>Options</em></strong>: please see the <strong>Stream options</strong> section.</li>
 		</ul>
@@ -203,7 +203,9 @@ kid2:key2
 			<li ><strong><em>Providers</em></strong>: the list of providers the user has access to. If the <strong>is Admin</strong> option is seletected, the user has access to all providers</li>
 			<li ><strong><em>Networks</em></strong>: allowed network for user. If nothing is selected, the user can access DRMSONIC from any ip.</li>
 			<li ><strong><em>IsAdmin</em></strong>: set user as admin. Only admin users can access the <code>Users</code> and <code>Config</code> pages.</li>
-			<li ><strong><em>WebAcess</em></strong>: allow Web UI access to user.</li>
+			<li ><strong><em>WebAcess</em></strong>: allow Web UI access to user. Without it the account can only pull playlists.</li>
+			<li ><strong><em>Playlist</em></strong>: allow playlist and stream access for the user. Untick it to revoke playlist access while keeping Web UI access.</li>
+			<li ><strong><em>Open panel without login</em></strong>: skip the login page entirely. Turn it off to require credentials again.</li>
 		</ul>
 		<br><h2><a href="rec" class="btn btn-primary" style="width:100px;">Recordings</a>&nbsp;&nbsp;Streams recording management page</h2><br>
 		<h2><a download href="playlist.m3u" class="btn btn-primary" style="width:100px;">Playlist</a>&nbsp;&nbsp;Playlist including channels available to user</h2>

@@ -401,7 +401,7 @@
 		</div>
 		<br>
 
-		<table style="clear:both;" id="streamsTable" class="table table-dark">
+		<table style="clear:both;" id="streamsTable" class="table table-dark channels">
 			<thead>
 				<TR>
 					<TH><input class="form-check-input" type="checkbox" id="checkall" /></TH><TH></TH><TH>Name</TH><TH>Status</TH><TH>Mode</TH><TH>Manifest</TH><TH>Tracks</TH><TH>Keys / CDM Script</TH><TH>Options</TH>
@@ -413,8 +413,8 @@
 					<TD></TD>
 					<TD>
 						<aside class="flexname">
-							<a style="color:white; font-size:12px; margin:auto;" id="name_{{$pid}}_{{$s.Id}}" type="button" class="btn btn-outline-secondary btn-bg">{{ if $s.IsEvent }}<img style="width: 20px; height: auto;" src="static/event.svg"/>&nbsp;&nbsp;{{ end }}{{$s.Name}}</a>
-							<input type="submit" class="btn btn-outline-primary btn-sm" id="renamestream_{{$pid}}_{{$s.Id}}" value="rename" />
+							<a style="color:white; font-size:12px; margin:auto;" id="name_{{$pid}}~{{$s.Id}}" type="button" class="btn btn-outline-secondary btn-bg">{{ if $s.IsEvent }}<img style="width: 20px; height: auto;" src="static/event.svg"/>&nbsp;&nbsp;{{ end }}{{$s.Name}}</a>
+							<input type="submit" class="btn btn-outline-primary btn-sm" id="renamestream_{{$pid}}~{{$s.Id}}" value="rename" />
 						</aside>
 					</TD>
 					<TD></TD><TD></TD><TD></TD><TD></TD><TD></TD><TD width="240px"></TD>
@@ -423,32 +423,16 @@
 		</table>
 		{{ end }}
 
+		<script src="static/tz.js"></script>
 		<script type="text/javascript">
 			var hls;
 			initPlayer();
 
 			document.getElementById('configbutton').style.backgroundColor = 'darkblue';
 
-			var table = $('#streamsTable').DataTable( {
-							"lengthMenu": [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
-							"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
-							"ordering": false,
-							"responsive": true,
-							"columns": [
-						{ "width": "1%" }, { "width": "5%" }, { "width": "15%" }, { "width": "10%" }, { "width": "10%" }, { "width": "15%" }, { "width": "15%" }, { "width": "20%" },  { "width": "15%" } ]
-						});
-
-			const urlParams = new URLSearchParams(window.location.search);
-			if (urlParams.get('search')) {
-				table.search(urlParams.get('search')).draw();
-			}
-
 			var intervalId = null;
 			var PChangeCounter = new Object();
 			var GlobalChangeCounter = -2;
-
-			table.on( 'draw.dt', function() { updateStreams(table, 1);} );
-
 			var streamsPrevParams = new Map();
 
 			saveall.onclick = saveClick;
@@ -459,8 +443,7 @@
 			importprovider.onclick = importProviderClick;
 
 			{{ if .Providers }}
-			providerSelection.onchange = refreshConfigWithProvider
-			document.getElementById('providerSelection').selectedIndex = -1;
+			providerSelection.onchange = refreshConfigWithProvider;
 			{{ if .ProviderId }}
 			for (i=0; i<document.getElementById('providerSelection').length; i++) {
 				if (document.getElementById('providerSelection').options[i].value == '{{ .ProviderId }}') {
@@ -471,8 +454,23 @@
 			{{ end }}
 			{{ end }}
 
-
 			{{ if .ProviderId }}
+
+			var table = $('#streamsTable').DataTable( {
+							"lengthMenu": [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
+							"dom": "<i><'row' <'col-sm'l><'col-sm'p><'col-sm'f>>rt",
+							"ordering": false,
+							"responsive": true,
+							"columns": [
+						{ "width": "1%" }, { "width": "4%" }, { "width": "13%" }, { "width": "10%" }, { "width": "10%" }, { "width": "16%" }, { "width": "16%" }, { "width": "16%" },  { "width": "14%" } ]
+						});
+
+			const urlParams = new URLSearchParams(window.location.search);
+			if (urlParams.get('search')) {
+				table.search(urlParams.get('search')).draw();
+			}
+
+			table.on('draw.dt', function() { updateStreams(table, 0); });
 
 			var url = new URL(window.location.href);
 			let params = new URLSearchParams(url.search);
@@ -586,7 +584,7 @@
 			document.querySelector(".js-Selector").innerHTML = selectorOptions;
 
 			updateStreams(table, 1);
-			intervalId=setInterval("updateStreams(table, 0);",1000);
+			intervalId = setInterval(function() { updateStreams(table, 0); }, 1000);
 			{{ end }}
 
 		</script>

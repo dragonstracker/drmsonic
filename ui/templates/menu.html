@@ -32,6 +32,7 @@
 			</ul>
 		</div>
 		{{ if .IsAdmin }}&nbsp;&nbsp;&nbsp;&nbsp;<a id="helpbutton" href="help" class="btn btn-primary" style="width:60px;">Help</a>{{ end }}
+		{{ if ne .LoggedUser "no-auth" }}&nbsp;&nbsp;&nbsp;&nbsp;<a id="logoutbutton" href="logout" class="btn btn-outline-primary" style="width:70px;">Logout</a>{{ end }}
 	</div>
 	<div id="playerDiv" style="float: right; margin-top: 10px; display: none; margin-left: -50px;">
 		<div class="col-sm" style="padding: 20px;">

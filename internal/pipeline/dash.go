@@ -101,6 +101,15 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 	if update > 10*time.Second {
 		update = 10 * time.Second
 	}
+	if seg := segmentSeconds(vSrc, aSrc); seg > 0 {
+		cadence := time.Duration(seg * float64(time.Second))
+		if cadence < time.Second {
+			cadence = time.Second
+		}
+		if cadence < update {
+			update = cadence
+		}
+	}
 
 	var muxer *mux.Muxer
 	if vSrc != nil {
@@ -115,6 +124,8 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 		pending    []avSample
 		lastLoad   = time.Now()
 		lastSwitch time.Time
+		idleAt     time.Time
+		loadFails  int
 	)
 
 	if !live {
@@ -130,8 +141,10 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 
 	for ctx.Err() == nil {
 		if time.Since(lastLoad) >= update {
-			if fresh, err := loadManifest(); err == nil {
+			fresh, err := loadManifest()
+			if err == nil {
 				m = fresh
+				live = cfg.Mode != "replay" && !m.Static
 				if vSrc != nil {
 					if t := findTrack(fresh.Video, vSrc.track.ID); t != nil {
 						vSrc.track = t
@@ -143,6 +156,15 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 					}
 				}
 				lastLoad = time.Now()
+				loadFails = 0
+			} else {
+				loadFails++
+				if loadFails >= 2 {
+					if endedStatus(err) {
+						return endBroadcast(cb)
+					}
+					return fail(cb, err)
+				}
 			}
 		}
 
@@ -156,13 +178,30 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 		}
 		videoAt := time.Now()
 
-		if !haveVideo && aSrc == nil {
-			wait(ctx, 400*time.Millisecond)
-			continue
+		if haveVideo {
+			idleAt = time.Time{}
+		} else {
+			if idleAt.IsZero() {
+				idleAt = time.Now()
+			}
+			if !live && time.Since(idleAt) > endGrace(update) {
+				return endBroadcast(cb)
+			}
 		}
+
 		if !haveVideo {
+			if vSrc != nil {
+				if live && time.Since(idleAt) > 15*time.Second {
+					cb.Status("Waiting for segments")
+				}
+				wait(ctx, 100*time.Millisecond)
+				continue
+			}
 			aRef, ok := pickNextSrc(aSrc, live)
 			if !ok {
+				if live && time.Since(idleAt) > 15*time.Second {
+					cb.Status("Waiting for segments")
+				}
 				wait(ctx, 400*time.Millisecond)
 				continue
 			}
@@ -171,7 +210,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 				if errors.Is(err, ErrMissingKey) {
 					return fail(cb, err)
 				}
-				cb.Error(err.Error())
+				cb.Error(Describe(err))
 				wait(ctx, time.Second)
 				continue
 			}
@@ -194,7 +233,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 			if errors.Is(err, ErrMissingKey) {
 				return fail(cb, err)
 			}
-			cb.Error(err.Error())
+			cb.Error(Describe(err))
 			wait(ctx, time.Second)
 			continue
 		}
@@ -229,7 +268,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 				}
 				samples, err := aSrc.fetch(ctx, cl, aRef)
 				if err != nil {
-					cb.Error(err.Error())
+					cb.Error(Describe(err))
 					break
 				}
 				aSrc.last = aRef.Time
@@ -348,6 +387,27 @@ func pickNext(t *manifest.Track, last int64, live bool) (manifest.SegmentRef, bo
 		tail = 6
 	}
 	return pickFromRefs(t.TailSegments(tail), last, live)
+}
+
+func segmentSeconds(v, a *streamState) float64 {
+	for _, s := range []*streamState{v, a} {
+		if s == nil || s.track == nil || s.track.Timescale <= 0 {
+			continue
+		}
+		ts := float64(s.track.Timescale)
+		if s.track.Template != nil {
+			if s.track.Template.Duration > 0 {
+				return float64(s.track.Template.Duration) / ts
+			}
+			items := s.track.Template.Timeline
+			if items != nil && len(items.Items) > 0 {
+				if d := items.Items[len(items.Items)-1].D; d > 0 {
+					return float64(d) / ts
+				}
+			}
+		}
+	}
+	return 0
 }
 
 func pickNextSrc(s *streamState, live bool) (manifest.SegmentRef, bool) {

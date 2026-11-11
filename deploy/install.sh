@@ -45,14 +45,21 @@ cd "$INSTALL_DIR"
 TMP="${BIN_NAME}.new"
 log "downloading $URL"
 if command -v curl >/dev/null 2>&1; then
-	curl -fL --retry 3 -o "$TMP" "$URL"
+	curl -fL --retry 3 -H 'Cache-Control: no-cache' -o "$TMP" "$URL"
 elif command -v wget >/dev/null 2>&1; then
-	wget -O "$TMP" "$URL"
+	wget --no-cache -O "$TMP" "$URL"
 else
 	die "need curl or wget"
 fi
 chmod +x "$TMP"
 mv -f "$TMP" "$BIN_NAME"
+
+VER="$("./${BIN_NAME}" -version 2>/dev/null || true)"
+[ -n "$VER" ] || die "binary will not run (-version failed)"
+log "binary: $VER"
+if [ "$TAG" = "dev" ] && ! printf '%s' "$VER" | grep -q 'dev-'; then
+	die "DRMSONIC_TAG=dev expected a dev-* build, got: $VER"
+fi
 
 if [ ! -f providers/example.json ]; then
 	cat >providers/example.json <<'JSON'
@@ -73,6 +80,33 @@ if [ ! -f providers/example.json ]; then
 }
 JSON
 fi
+
+seed_default_admin() {
+	local conf="${INSTALL_DIR}/drmsonic.json"
+	if [ -f "$conf" ]; then
+		return 0
+	fi
+	local tok
+	tok="$(openssl rand -hex 24 2>/dev/null || head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+	cat >"$conf" <<JSON
+{
+	"Users": [
+		{
+			"Username": "admin",
+			"Password": "admin",
+			"StreamToken": "${tok}",
+			"ProviderIds": [],
+			"Network": "",
+			"IsAdmin": true,
+			"HasWebAccess": true
+		}
+	]
+}
+JSON
+	log "seeded default admin in drmsonic.json"
+}
+
+seed_default_admin
 
 cat >"/etc/systemd/system/${SERVICE}.service" <<UNIT
 [Unit]
@@ -95,6 +129,8 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now "${SERVICE}.service"
 systemctl restart "${SERVICE}.service"
+sleep 1
+systemctl is-active --quiet "${SERVICE}.service" || die "service failed to start — journalctl -u ${SERVICE} -n 50 --no-pager"
 
 if command -v ufw >/dev/null 2>&1; then
 	ufw allow "${PORT}/tcp" >/dev/null 2>&1 || true
@@ -107,5 +143,6 @@ else
 	log "installed"
 fi
 log "panel: http://${PUBLIC_IP:-<server-ip>}:${PORT}"
+log "login: admin / admin  (change under Users after first login)"
 log "status: systemctl status ${SERVICE} --no-pager"
 log "logs:   journalctl -u ${SERVICE} -f"

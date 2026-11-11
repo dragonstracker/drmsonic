@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -30,6 +31,10 @@ func (s *Server) handleStatusIndex(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("provider")
+	if !s.canAccessProvider(r, id) {
+		http.Error(w, "invalid provider", http.StatusNotFound)
+		return
+	}
 	p := s.basePage(r)
 	prov := s.store.Provider(id)
 	if prov == nil {
@@ -40,6 +45,15 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	p.Provider = prov
 	p.ProviderId = prov.Id
 	p.Streams = prov.Streams
+	p.StreamsCount = len(prov.Streams)
+	p.StreamTables = []*config.Provider{prov}
+	if r.URL.Query().Get("filter") == "allrunning" {
+		p.StreamTables = p.Providers
+		p.StreamsCount = 0
+		for _, other := range p.Providers {
+			p.StreamsCount += len(other.Streams)
+		}
+	}
 	s.render(w, "streams.html", p)
 }
 
@@ -56,6 +70,10 @@ func (s *Server) handleConfigIndex(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("provider")
+	if !s.canAccessProvider(r, id) {
+		http.Error(w, "invalid provider", http.StatusNotFound)
+		return
+	}
 	p := s.basePage(r)
 	prov := s.store.Provider(id)
 	if prov == nil {
@@ -82,6 +100,10 @@ func (s *Server) handleEventsIndex(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("provider")
+	if !s.canAccessProvider(r, id) {
+		http.Error(w, "invalid provider", http.StatusNotFound)
+		return
+	}
 	p := s.basePage(r)
 	prov := s.store.Provider(id)
 	if prov == nil {
@@ -106,6 +128,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 	p := s.basePage(r)
 	p.Title = "Users"
 	p.Users = s.store.Users()
+	p.NoAuth = s.store.NoAuth()
 	s.render(w, "users.html", p)
 }
 
@@ -142,21 +165,64 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "\t[%s/%s]\n\t\tTotal: %d\n\t\tRunning: %d\n", p.Id, p.Name, len(p.Streams), run)
 	}
 	fmt.Fprintf(w, "\tTotal: %d\n\tRunning: %d\n", total, running)
+	fmt.Fprintf(w, "\nSegment buffers:\n")
+	for _, line := range s.media.dump() {
+		fmt.Fprintf(w, "\t%s\n", line)
+	}
 	fmt.Fprintf(w, "\n</pre></html>")
+}
+
+func (s *Server) streamCredPrefix(r *http.Request) string {
+	if u, p, ok := pathUserPass(r); ok {
+		return userPassPrefix(u, p)
+	}
+	u, ok := s.currentUser(r)
+	if ok {
+		pass := u.Password
+		if pass == "" {
+			if full, ok2 := s.store.UserByName(u.Username); ok2 {
+				pass = full.Password
+			}
+		}
+		if u.Username != "" && pass != "" {
+			return userPassPrefix(u.Username, pass)
+		}
+		if s.staticToken != "" && u.Username == s.opts.User && s.opts.Password != "" {
+			return userPassPrefix(s.opts.User, s.opts.Password)
+		}
+		if u.StreamToken != "" {
+			return tokenPrefix(u.StreamToken)
+		}
+	}
+	if tok, ok := pathToken(r); ok && tok != "" {
+		return tokenPrefix(tok)
+	}
+	return ""
 }
 
 func (s *Server) handleApp1(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if !s.canUsePlaylist(r) {
+		http.Error(w, "# drmsonic: playlist access disabled for this account", http.StatusForbidden)
+		return
+	}
 	host := strings.TrimPrefix(strings.TrimPrefix(s.baseFor(r), "http://"), "https://")
+	prefix := s.streamCredPrefix(r)
 	var b strings.Builder
-	for _, p := range s.store.Providers() {
+	count := 0
+	for _, p := range s.visibleProviders(r) {
 		for i := range p.Streams {
 			st := &p.Streams[i]
 			fmt.Fprintf(&b, "stream %s_%s {\n", p.Id, st.Id)
-			fmt.Fprintf(&b, "\turl hls://%s/stream/%s/%s/master.m3u8;\n", host, p.Id, st.Id)
+			fmt.Fprintf(&b, "\turl hls://%s%s/stream/%s/%s/master.m3u8;\n", host, prefix, p.Id, st.Id)
 			fmt.Fprintf(&b, "\ttitle \"[%s] %s\";\n", p.Id, st.Name)
 			fmt.Fprintf(&b, "}\n\n")
+			count++
 		}
+	}
+	if count == 0 {
+		b.WriteString("# drmsonic: no streams configured\n")
 	}
 	fmt.Fprint(w, b.String())
 }
@@ -164,17 +230,19 @@ func (s *Server) handleApp1(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleM3U(scope string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-mpegurl")
-		user := r.URL.Query().Get("user")
-		suffix := ""
-		if user != "" {
-			suffix = "?user=" + user
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Cache-Control", "no-store")
+		if !s.canUsePlaylist(r) {
+			http.Error(w, "# drmsonic: playlist access disabled for this account", http.StatusForbidden)
+			return
 		}
-
+		prefix := s.streamCredPrefix(r)
 		var b strings.Builder
 		b.WriteString("#EXTM3U x-tvg-url=\"\"\n\n")
 		base := s.baseFor(r)
+		count := 0
 
-		for _, p := range s.store.Providers() {
+		for _, p := range s.visibleProviders(r) {
 			for i := range p.Streams {
 				st := &p.Streams[i]
 				if scope == "live" && st.Mode != config.ModeLive {
@@ -188,8 +256,12 @@ func (s *Server) handleM3U(scope string) http.HandlerFunc {
 				}
 				fmt.Fprintf(&b, "#EXTINF:1 group-title=\"%s\" tvg-id=\"%s/%s\" tvg-logo=\"\" provider=\"%s\" provider-logo=\"\" provider-type=\"iptv\",[%s] %s\n",
 					p.Id, p.Id, st.Id, p.Id, p.Id, st.Name)
-				fmt.Fprintf(&b, "%s/stream/%s/%s/master.m3u8%s\n\n", base, p.Id, st.Id, suffix)
+				fmt.Fprintf(&b, "%s%s/stream/%s/%s/master.m3u8\n\n", base, prefix, p.Id, st.Id)
+				count++
 			}
+		}
+		if count == 0 {
+			b.WriteString("# drmsonic: no streams configured\n")
 		}
 		fmt.Fprint(w, b.String())
 	}
@@ -200,17 +272,73 @@ func (s *Server) handleMasterPlaylist(w http.ResponseWriter, r *http.Request) {
 	if prov == nil {
 		return
 	}
-	w.Header().Set("Content-Type", "application/x-mpegurl")
-	s.media.touch(prov.Id, st.Id)
+	w.Header().Set("Content-Type", hlsMIME)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-store")
+	s.media.touch(prov.Id, st.Id, "")
 	if err := s.ensureRunning(prov, st); err != nil {
 		http.Error(w, "#EXTM3U\n", http.StatusServiceUnavailable)
 		return
 	}
-	bandwidth := 0
-	res := "1920x1080"
-	fps := "30.00"
-	codecs := "avc1.640028,mp4a.40.2"
+	audioCodec := ""
+	if st.Audio != "none" && len(st.AudioList) > 0 {
+		audioCodec = st.AudioList[0].Codecs
+		if audioCodec == "" {
+			audioCodec = "mp4a.40.2"
+		}
+	}
+	fmt.Fprintf(w, "#EXTM3U\n")
+	rends := renditionIDs(st)
+	if len(rends) > 1 {
+		sort.SliceStable(rends, func(i, j int) bool {
+			a, b := trackByID(st, rends[i]), trackByID(st, rends[j])
+			ba, bb := 0, 0
+			if a != nil {
+				ba = a.Bandwidth
+			}
+			if b != nil {
+				bb = b.Bandwidth
+			}
+			return ba > bb
+		})
+		s.awaitSegments(r, prov, st, rends[0], 1, coldStartWait(prov, st))
+		emitted := 0
+		for _, id := range rends {
+			if len(s.segments(prov, st, id).Items) == 0 {
+				continue
+			}
+			t := trackByID(st, id)
+			bandwidth, res, fps, codecs := s.variantMeta(prov, st, id, t, audioCodec)
+			fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
+			fmt.Fprintf(w, "v/%s/stream.m3u8%s\n", id, queryString(r))
+			emitted++
+		}
+		if emitted == 0 {
+			t := trackByID(st, rends[0])
+			bandwidth, res, fps, codecs := s.variantMeta(prov, st, rends[0], t, audioCodec)
+			fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
+			fmt.Fprintf(w, "v/%s/stream.m3u8%s\n", rends[0], queryString(r))
+		}
+		return
+	}
 	v := selectedVideo(st)
+	bandwidth, res, fps, codecs := s.variantMeta(prov, st, "", v, audioCodec)
+	fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
+	fmt.Fprintf(w, "stream.m3u8%s\n", queryString(r))
+}
+
+func (s *Server) variantMeta(prov *config.Provider, st *config.Stream, rend string, v *config.Track, audioCodec string) (bandwidth int, res, fps, codecs string) {
+	bandwidth, res, fps, codecs = variantMeta(v, audioCodec)
+	if measured := s.media.bitrate(prov.Id, st.Id, rend); measured > 0 {
+		bandwidth = measured
+	}
+	return bandwidth, res, fps, codecs
+}
+
+func variantMeta(v *config.Track, audioCodec string) (bandwidth int, res, fps, codecs string) {
+	res = "1920x1080"
+	fps = "30.00"
+	codecs = "avc1.640028"
 	if v != nil {
 		bandwidth = v.Bandwidth
 		if v.Width > 0 && v.Height > 0 {
@@ -226,16 +354,19 @@ func (s *Server) handleMasterPlaylist(w http.ResponseWriter, r *http.Request) {
 	if bandwidth == 0 {
 		bandwidth = 8133000
 	}
-	if st.Audio != "none" && len(st.AudioList) > 0 {
-		codec := st.AudioList[0].Codecs
-		if codec == "" {
-			codec = "mp4a.40.2"
-		}
-		codecs += "," + codec
+	if audioCodec != "" {
+		codecs += "," + audioCodec
 	}
-	fmt.Fprintf(w, "#EXTM3U\n")
-	fmt.Fprintf(w, "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=%d,RESOLUTION=%s,FRAME-RATE=%s,CODECS=\"%s\"\n", bandwidth, res, fps, codecs)
-	fmt.Fprintf(w, "stream.m3u8%s\n", queryString(r))
+	return bandwidth, res, fps, codecs
+}
+
+func trackByID(st *config.Stream, id string) *config.Track {
+	for i := range st.VideoList {
+		if st.VideoList[i].Id == id {
+			return &st.VideoList[i]
+		}
+	}
+	return nil
 }
 
 func (s *Server) handleMediaPlaylist(w http.ResponseWriter, r *http.Request) {
@@ -243,17 +374,24 @@ func (s *Server) handleMediaPlaylist(w http.ResponseWriter, r *http.Request) {
 	if prov == nil {
 		return
 	}
-	w.Header().Set("Content-Type", "application/x-mpegurl")
-	s.media.touch(prov.Id, st.Id)
+	rend := r.PathValue("rend")
+	writeMediaHeaders(w)
+	w.Header().Set("Content-Type", hlsMIME)
+	w.Header().Set("Cache-Control", "no-store")
+	s.media.touch(prov.Id, st.Id, rend)
 	if err := s.ensureRunning(prov, st); err != nil {
 		http.Error(w, "stream unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	s.awaitSegments(r, prov, st, 2, 10*time.Second)
-	buf := s.segments(prov, st)
+	s.awaitSegments(r, prov, st, rend, 1, coldStartWait(prov, st))
+	buf := s.segments(prov, st, rend)
+	items := buf.Items
+	if n := windowFor(prov, st); len(items) > n {
+		items = items[len(items)-n:]
+	}
 	seq := buf.Seq
-	if len(buf.Items) > 0 {
-		seq = buf.Items[0].Seq
+	if len(items) > 0 {
+		seq = items[0].Seq
 	}
 	fmt.Fprintf(w, "#EXTM3U\n")
 	fmt.Fprintf(w, "#EXT-X-VERSION:6\n")
@@ -261,7 +399,7 @@ func (s *Server) handleMediaPlaylist(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "#EXT-X-DISCONTINUITY-SEQUENCE:0\n")
 	fmt.Fprintf(w, "#EXT-X-TARGETDURATION:%d\n", buf.Target)
 	fmt.Fprintf(w, "#EXT-X-INDEPENDENT-SEGMENTS\n")
-	for _, seg := range buf.Items {
+	for _, seg := range items {
 		fmt.Fprintf(w, "#EXTINF:%.8f,\n", seg.Duration)
 		fmt.Fprintf(w, "%s%s\n", seg.Name, queryString(r))
 	}
@@ -272,21 +410,19 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 	if prov == nil {
 		return
 	}
+	rend := r.PathValue("rend")
 	name := r.PathValue("file")
 	if !strings.HasSuffix(name, ".ts") {
 		http.NotFound(w, r)
 		return
 	}
-	s.media.touch(prov.Id, st.Id)
+	writeMediaHeaders(w)
+	s.media.touch(prov.Id, st.Id, rend)
 	if err := s.ensureRunning(prov, st); err != nil {
 		http.Error(w, "stream unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	if ch := s.mgr.Get(prov.Id, st.Id); ch != nil && ch.Running {
-		ch.Readers++
-	}
-	s.awaitSegments(r, prov, st, 1, 5*time.Second)
-	data, ok := s.segmentData(prov, st, name)
+	data, ok := s.awaitSegment(r, prov, st, rend, name)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -296,12 +432,27 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func (s *Server) awaitSegments(r *http.Request, prov *config.Provider, st *config.Stream, want int, limit time.Duration) {
+const hlsMIME = "application/vnd.apple.mpegurl"
+
+func writeMediaHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Accel-Buffering", "no")
+}
+
+func coldStartWait(prov *config.Provider, st *config.Stream) time.Duration {
+	d := time.Duration(windowFor(prov, st)) * time.Second
+	if d < 2*time.Second {
+		d = 2 * time.Second
+	}
+	return d
+}
+
+func (s *Server) awaitSegments(r *http.Request, prov *config.Provider, st *config.Stream, rend string, want int, limit time.Duration) {
 	if want < 1 {
 		want = 1
 	}
 	deadline := time.Now().Add(limit)
-	for len(s.segments(prov, st).Items) < want {
+	for len(s.segments(prov, st, rend).Items) < want {
 		if time.Now().After(deadline) || r.Context().Err() != nil {
 			return
 		}
@@ -313,9 +464,64 @@ func (s *Server) awaitSegments(r *http.Request, prov *config.Provider, st *confi
 	}
 }
 
+func (s *Server) awaitSegment(r *http.Request, prov *config.Provider, st *config.Stream, rend, name string) ([]byte, bool) {
+	seq, ok := segmentSeq(name)
+	if !ok {
+		return nil, false
+	}
+	var deadline time.Time
+	for {
+		if data, found := s.segmentData(prov, st, rend, name); found {
+			return data, true
+		}
+		buf := s.segments(prov, st, rend)
+		if len(buf.Items) == 0 {
+			return nil, false
+		}
+		oldest, newest := buf.Items[0].Seq, buf.Items[len(buf.Items)-1].Seq
+		if seq < oldest || seq > newest+1 {
+			return nil, false
+		}
+		if deadline.IsZero() {
+			deadline = time.Now().Add(time.Duration(buf.Target+1) * time.Second)
+		}
+		if seq <= newest || time.Now().After(deadline) || r.Context().Err() != nil {
+			return nil, false
+		}
+		select {
+		case <-r.Context().Done():
+			return nil, false
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+func segmentSeq(name string) (uint64, bool) {
+	name = strings.TrimSuffix(strings.TrimPrefix(name, "stream"), ".ts")
+	if name == "" || len(name) > 19 {
+		return 0, false
+	}
+	var seq uint64
+	for i := 0; i < len(name); i++ {
+		if name[i] < '0' || name[i] > '9' {
+			return 0, false
+		}
+		seq = seq*10 + uint64(name[i]-'0')
+	}
+	return seq, true
+}
+
 func (s *Server) streamFromPath(w http.ResponseWriter, r *http.Request) (*config.Provider, *config.Stream) {
+	if !s.canUsePlaylist(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return nil, nil
+	}
 	pid := r.PathValue("provider")
 	sid := r.PathValue("stream")
+	if !s.canAccessProvider(r, pid) {
+		http.Error(w, "invalid provider", http.StatusNotFound)
+		return nil, nil
+	}
 	prov := s.store.Provider(pid)
 	if prov == nil {
 		http.Error(w, "invalid provider", http.StatusNotFound)

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ type Store struct {
 	dir       string
 	providers map[string]*Provider
 	users     []User
+	noAuth    bool
 	confPath  string
 	order     []string
 }
@@ -32,7 +34,32 @@ func NewStore(dir, confPath string) (*Store, error) {
 	if err := s.Load(); err != nil {
 		return nil, err
 	}
+	if err := s.EnsureTokensPersisted(); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+func (s *Store) EnsureTokensPersisted() error {
+	s.mu.Lock()
+	users, changed := EnsureUserTokens(s.users)
+	s.users = users
+	s.mu.Unlock()
+	if !changed {
+		return nil
+	}
+	return s.SaveUsers()
+}
+
+func (s *Store) EnsureDefaultAdmin() (bool, error) {
+	s.mu.Lock()
+	users, changed := EnsureDefaultAdmin(s.users)
+	s.users = users
+	s.mu.Unlock()
+	if !changed {
+		return false, nil
+	}
+	return true, s.SaveUsers()
 }
 
 func (s *Store) Dir() string {
@@ -83,7 +110,8 @@ func (s *Store) Load() error {
 		if raw, err := os.ReadFile(s.confPath); err == nil {
 			var c Config
 			if json.Unmarshal(raw, &c) == nil {
-				s.users = c.Users
+				s.users, _ = EnsureUserTokens(c.Users)
+				s.noAuth = c.NoAuth
 			}
 		}
 	}
@@ -162,10 +190,51 @@ func (s *Store) Users() []User {
 	return out
 }
 
+func (s *Store) NoAuth() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.noAuth
+}
+
+func (s *Store) SetNoAuth(v bool) {
+	s.mu.Lock()
+	s.noAuth = v
+	s.mu.Unlock()
+}
+
+func (s *Store) UserByName(name string) (User, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, u := range s.users {
+		if u.Username == name {
+			return u, true
+		}
+	}
+	return User{}, false
+}
+
 func (s *Store) SetUsers(u []User) {
 	s.mu.Lock()
-	s.users = u
+	users, _ := EnsureUserTokens(u)
+	s.users = users
 	s.mu.Unlock()
+}
+
+func (s *Store) UserByToken(token string) (User, bool) {
+	if token == "" {
+		return User{}, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, u := range s.users {
+		if u.StreamToken == "" {
+			continue
+		}
+		if subtle.ConstantTimeCompare([]byte(u.StreamToken), []byte(token)) == 1 {
+			return u, true
+		}
+	}
+	return User{}, false
 }
 
 func (s *Store) Put(p *Provider) error {
@@ -174,6 +243,7 @@ func (s *Store) Put(p *Provider) error {
 	if p.Id == "" {
 		return errors.New("empty provider id")
 	}
+	p.Streams = normalizeStreams(p.Streams, p)
 	if _, ok := s.providers[p.Id]; !ok {
 		s.order = append(s.order, p.Id)
 		sort.Strings(s.order)
@@ -219,7 +289,7 @@ func (s *Store) writeProviderLocked(p *Provider) error {
 
 func (s *Store) SaveUsers() error {
 	s.mu.RLock()
-	raw, err := json.MarshalIndent(Config{Users: s.users}, "", "\t")
+	raw, err := json.MarshalIndent(Config{Users: s.users, NoAuth: s.noAuth}, "", "\t")
 	s.mu.RUnlock()
 	if err != nil {
 		return err

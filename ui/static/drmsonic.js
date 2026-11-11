@@ -1,16 +1,50 @@
+function streamDomId(providerId, streamId) {
+	return '_' + providerId + '~' + streamId
+}
+
 function getStreamId(id) {
-	return /_.*_(.*)/.exec(id)[1]
+	var i = id.indexOf('~')
+	if (i >= 0) {
+		return id.slice(i + 1)
+	}
+	var m = /_([^_]+)_(.+)$/.exec(id)
+	return m ? m[2] : id
 }
 
 function getProviderId(id) {
-	return /_(.*)_.*/.exec(id)[1]
+	var i = id.indexOf('~')
+	if (i >= 0) {
+		if (id.charAt(0) === '_') {
+			return id.slice(1, i)
+		}
+		var start = id.indexOf('_')
+		if (start >= 0 && start < i) {
+			return id.slice(start + 1, i)
+		}
+		return id.slice(0, i)
+	}
+	var m = /_([^_]+)_(.+)$/.exec(id)
+	return m ? m[1] : id
 }
 
 function getId(id) {
 	if (id.includes('recstreamname')) {
 		return /recstreamname(.*)/.exec(id)[1]
-	} 	
+	}
+	var m = /(_[^~]+~.+)$/.exec(id)
+	if (m) {
+		return m[1]
+	}
 	return /(_.*_.*)/.exec(id)[1]
+}
+
+function parseNameDomId(html) {
+	var m = /name(_[^~]+~[^"]*)/.exec(html)
+	if (m) {
+		return m[1]
+	}
+	m = /name(_[^_]*_[^"]*)/.exec(html)
+	return m ? m[1] : null
 }
 
 function initPlayer() {
@@ -39,12 +73,35 @@ async function noPlayer(e) {
 	showStatusWindow('Stream not available');
 }
 
+var hlsLoader = null;
+
+function loadHls() {
+	if (typeof Hls !== 'undefined') {
+		return Promise.resolve(true)
+	}
+	if (!hlsLoader) {
+		hlsLoader = new Promise(function (resolve) {
+			var script = document.createElement('script');
+			script.src = document.getElementById('baseUrl').value + 'static/hls.min.js';
+			script.onload = function () { resolve(true) };
+			script.onerror = function () { hlsLoader = null; resolve(false) };
+			document.head.appendChild(script);
+		});
+	}
+	return hlsLoader
+}
+
 async function setPlayer(e, id) {
 	e.preventDefault();
 
 	video = document.getElementById('player');
 	if (!video) {
 		return false
+	}
+
+	if (!(await loadHls())) {
+		showStatusWindow('Player library unavailable');
+		return
 	}
 
 	if (!id) {
@@ -428,46 +485,54 @@ async function massupdateClick(e) {
 	}
 }
 
-async function updateUser(e) {
+function collectUsersFromForm() {
+	var users = [];
+	var n = 0;
+	while (document.getElementById('username' + n)) {
+		var picked = $('#userProviders' + n).val();
+		users.push({
+			Username: document.getElementById('username' + n).innerText.trim(),
+			Password: $('#password' + n).val(),
+			Network: $('#network' + n).val(),
+			IsAdmin: document.getElementById('isadmin' + n).checked,
+			HasWebAccess: document.getElementById('haswebaccess' + n).checked,
+			NoPlaylist: !document.getElementById('playlist' + n).checked,
+			ProviderIds: picked ? picked : []
+		});
+		n++;
+	}
+	return users;
+}
+
+async function saveUsersClick(e) {
 	e.preventDefault();
-
-	n = this.id.replace(/\D/g, "")
-
-	var userProviders = [];
-	$('#userProviders' + n).val().forEach(function(id) {
-		userProviders.push(id)
-	});
-
-	data = {
-		Action : 'updateuser',
-		Users : [
-			{
-				Username : document.getElementById('username' + n).innerText,
-				Password : $('#password' + n).val(),
-				Network : $('#network' + n).val(),
-				IsAdmin: document.getElementById('isadmin' + n).checked,
-				HasWebAccess: document.getElementById('haswebaccess' + n).checked,
-				ProviderIds: userProviders
-			},
-		]
+	var noauthEl = document.getElementById('noauth');
+	var users = collectUsersFromForm();
+	for (var i = 0; i < users.length; i++) {
+		var el = document.getElementById('password' + i);
+		var needPass = el && el.getAttribute('placeholder') === 'set password';
+		if (needPass && !(users[i].Password || '').trim()) {
+			showStatusWindow('set a password for user: ' + users[i].Username);
+			return;
+		}
 	}
-
-	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
-		headers: {
-			'Content-Type': 'application/json',
-		},
+	var data = {
+		Action: 'saveusers',
+		NoAuth: !!(noauthEl && noauthEl.checked),
+		Users: users
+	};
+	let response = await fetch(document.getElementById('baseUrl').value + 'api/action', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		credentials: 'same-origin',
 		body: JSON.stringify(data),
-	})
-
+	});
 	if (!response.ok) {
-		text = await response.text();
-		showStatusWindow(text);
-		return
+		showStatusWindow(await response.text());
+		return;
 	}
-
-	document.getElementById('saveusers').removeAttribute("disabled");
-};
+	location.reload();
+}
 
 
 async function updateGlobal(e) {
@@ -638,14 +703,11 @@ async function shutdownClick(e) {
 	}
 };
 
-// SAVE onAbOck
 async function saveClick(e) {
 	e.preventDefault();
 
 	if (this.id == 'saveall') {
 		providerId = ""
-	} else if (this.id == 'saveusers') {
-		providerId = "users_only"
 	} else {
 		providerId = document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value
 	}
@@ -656,10 +718,11 @@ async function saveClick(e) {
 	};
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
+		credentials: 'same-origin',
 		body: JSON.stringify(data),
 	});
 
@@ -669,8 +732,6 @@ async function saveClick(e) {
 	} else {
 		if (this.id == 'saveall') {
 			document.getElementById('saveall').setAttribute("disabled","disabled");
-		} else if (this.id == 'saveusers') {
-			document.getElementById('saveusers').setAttribute("disabled","disabled");
 		} else {
 			document.getElementById('saveprovider').setAttribute("disabled","disabled");
 		}
@@ -705,13 +766,17 @@ async function rescanProvidersClick(e) {
 
 async function addProviderFormSubmit(e) {
 	e.preventDefault();
+	var name = document.getElementById('addProviderText').value.trim();
+	if (!name) {
+		return;
+	}
 	data = {
 		Action : "addprovider",
-		ProviderName : document.getElementById('addProviderText').value,
+		ProviderName : name,
 	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
@@ -721,9 +786,10 @@ async function addProviderFormSubmit(e) {
 	text = await response.text();
 	if (!response.ok) {
 		showStatusWindow(text);
-	} else {
-		window.location.href = "/config/" + text
+		return;
 	}
+	var id = JSON.parse(text);
+	window.location.href = "/config/" + id;
 };
 
 // ADD onCLick
@@ -820,9 +886,10 @@ async function renameProviderClick(e) {
 	text = await response.text();
 	if (!response.ok) {
 		showStatusWindow(text);
-	} else {
-		window.location.href = "/config/" + text
+		return;
 	}
+	var id = JSON.parse(text);
+	window.location.href = "/config/" + id;
 };
 
 
@@ -998,16 +1065,17 @@ async function getEvents(epgtable) {
 			color = "white"
 		}
 
-		evid = '<a id="name_' + providerId + '_' + entry.EventId + '" href="' + entry.StreamingUrl + '" onclick="return setPlayer(event, id);">' + entry.EventId + '</a>'
+		var eventDom = streamDomId(providerId, entry.EventId)
+		evid = '<a id="name' + eventDom + '" href="' + entry.StreamingUrl + '" onclick="return setPlayer(event, id);">' + entry.EventId + '</a>'
 		if (entry.OnAirId != '') {
-			evid += '<br><a id="name_' + providerId + '_' + entry.OnAirId + '" href="' + entry.StreamingOnAirUrl + '" onclick="return setPlayer(event, id);">' + entry.OnAirId + '</a>'
+			evid += '<br><a id="name' + streamDomId(providerId, entry.OnAirId) + '" href="' + entry.StreamingOnAirUrl + '" onclick="return setPlayer(event, id);">' + entry.OnAirId + '</a>'
 		}
 		conf = '<a href="config/' + providerId + '?search=' + entry.Title + '"><img style="width: 20px; height: auto;" src="static/gear.svg" /></a>'
 
 		if (entry.Running) {
-			play = '<button onclick="return startStopClick(event, id)"; style="border-color: transparent;" type="button" class="btn" id="startStop_' + providerId + '_' + entry.EventId + '"><img id="playstop_' + providerId + '_' + entry.EventId + '" style="width: 20px; height: auto;" src="static/stop.svg"/></button>'
+			play = '<button onclick="return startStopClick(event, id)"; style="border-color: transparent;" type="button" class="btn" id="startStop' + eventDom + '"><img id="playstop' + eventDom + '" style="width: 20px; height: auto;" src="static/stop.svg"/></button>'
 		} else {
-			play = '<button onclick="return startStopClick(event, id)"; style="border-color: transparent;" type="button" class="btn" id="startStop_' + providerId + '_' + entry.EventId + '"><img id="playstop_' + providerId + '_' + entry.EventId + '" style="width: 20px; height: auto;" src="static/play.svg"/></button>'
+			play = '<button onclick="return startStopClick(event, id)"; style="border-color: transparent;" type="button" class="btn" id="startStop' + eventDom + '"><img id="playstop' + eventDom + '" style="width: 20px; height: auto;" src="static/play.svg"/></button>'
 		}
 
 		if (entry.Status.includes("Error:") || entry.Status.includes('Key(s) missing')) {
@@ -1022,7 +1090,7 @@ async function getEvents(epgtable) {
 		}
 		statusColor = entry.StatusColor;
 
-		epgtable.row.add(['<a id="title_' + providerId + '_' + entry.EventId + '" style="color: ' + color + '";>' +  entry.Title + '</a>', '<pre id="status_' + providerId + '_' + entry.EventId + '" onclick="return showErrorLogWindow(event, id)"; style="color: ' + statusColor + ';">' + status + '</pre><div hidden id="statusfull_' + providerId + '_' + entry.EventId + '">' + entry.Status + '</div>', entry.StartFmt, entry.EndFmt, evid, play+conf]).draw()
+		epgtable.row.add(['<a id="title' + eventDom + '" style="color: ' + color + '";>' +  entry.Title + '</a>', '<pre id="status' + eventDom + '" onclick="return showErrorLogWindow(event, id)"; style="color: ' + statusColor + ';">' + status + '</pre><div hidden id="statusfull' + eventDom + '">' + entry.Status + '</div>', entry.StartFmt, entry.EndFmt, evid, play+conf]).draw()
 	})
 
 	$(epgtable.column(2).header()).text('Start Date (' + data.Timezone + ')');
@@ -1066,17 +1134,18 @@ async function updateEvents(epgtable) {
 	providerId = document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value
 
 	data.Entries.forEach(function(entry){
-		if (document.getElementById('name_' + providerId + '_' + entry.EventId) && isInViewport(document.getElementById('name_' + providerId + '_' + entry.EventId))) {
+		var eventDom = streamDomId(providerId, entry.EventId)
+		if (document.getElementById('name' + eventDom) && isInViewport(document.getElementById('name' + eventDom))) {
 			if (entry.Running) {
-				document.getElementById('playstop_' + providerId + '_' + entry.EventId).src = "static/stop.svg"
+				document.getElementById('playstop' + eventDom).src = "static/stop.svg"
 			} else {
-				document.getElementById('playstop_' + providerId + '_' + entry.EventId).src = "static/play.svg"
+				document.getElementById('playstop' + eventDom).src = "static/play.svg"
 			}
 
 			if (entry.OnAirId != '') {
-				document.getElementById('title_' + providerId + '_' + entry.EventId).style.color = "green"
+				document.getElementById('title' + eventDom).style.color = "green"
 			} else {
-				document.getElementById('title_' + providerId + '_' + entry.EventId).style.color = "white"
+				document.getElementById('title' + eventDom).style.color = "white"
 			}
 
 
@@ -1090,8 +1159,8 @@ async function updateEvents(epgtable) {
 			} else {
 				status = entry.Status;
 			}
-			document.getElementById('status_' + providerId + '_' + entry.EventId).innerText = status;
-			document.getElementById('status_' + providerId + '_' + entry.EventId).style.color = entry.StatusColor;
+			document.getElementById('status' + eventDom).innerText = status;
+			document.getElementById('status' + eventDom).style.color = entry.StatusColor;
 		}
 	})
 
@@ -1135,8 +1204,9 @@ async function getReplays(replaystable) {
 			color = "white"
 		}
 
-		replayid = '<a id="replay_' + document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value + '_' + replay.EventId + '" href="' + replay.StreamingUrl + '" onclick="return setPlayer(event, id);">' + replay.EventId + '</a>';
-		del = '<input type="button" class="btn btn-primary" id="deletereplay_' + document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value + '_' + replay.EventId + '" value="DELETE" onclick="return deleteReplayClick(event, id);"/>'
+		var replayDom = streamDomId(document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value, replay.EventId)
+		replayid = '<a id="replay' + replayDom + '" href="' + replay.StreamingUrl + '" onclick="return setPlayer(event, id);">' + replay.EventId + '</a>';
+		del = '<input type="button" class="btn btn-primary" id="deletereplay' + replayDom + '" value="DELETE" onclick="return deleteReplayClick(event, id);"/>'
 
 		replaystable.row.add(['<a style="color: ' + color + '";>' + replay.EventName + '</a>', replay.StartFmt, replay.EndFmt, replayid, del]).draw()
 	})
@@ -1211,29 +1281,46 @@ async function applyGlobalNetworkClick(e) {
 // ADD onCLick
 async function addUserFormSubmit(e) {
 	e.preventDefault();
+	var name = (document.getElementById('addUserText').value || '').trim();
+	if (!name) {
+		showStatusWindow('missing username');
+		return;
+	}
+	var pass = window.prompt('Password for ' + name, '');
+	if (pass == null) {
+		return;
+	}
+	pass = String(pass).trim();
+	if (!pass) {
+		showStatusWindow('password required');
+		return;
+	}
 	data = {
 		Action : "adduser",
 		Users : [
 			{
-				Username : document.getElementById('addUserText').value,
+				Username : name,
+				Password : pass,
+				HasWebAccess : true,
 			},
 		]
 	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
+		credentials: 'same-origin',
 		body: JSON.stringify(data),
 	})
 
 	if (!response.ok) {
 		text = await response.text();
 		showStatusWindow(text);
-	} else {
-		location.reload();
+		return;
 	}
+	location.reload();
 };
 
 async function deleteSelectionClick(e) {
@@ -1388,10 +1475,21 @@ async function importProviderClick(e) {
 	el.click();
 }
 
-async function deleteUserClick(e) {
+function usersTableClick(e) {
+	var btn = e.target.closest('[data-user-action]');
+	if (!btn) {
+		return;
+	}
 	e.preventDefault();
-	n = this.id.replace("deleteuser", "")
+	var n = btn.getAttribute('data-user-index');
+	if (btn.getAttribute('data-user-action') == 'delete') {
+		deleteUser(n);
+	} else {
+		renameUser(n);
+	}
+}
 
+async function deleteUser(n) {
 	var result = confirm("Are you sure you want to delete " + document.getElementById('username' + n).innerText + "?");
 	if (result != true) {
 		return
@@ -1407,10 +1505,11 @@ async function deleteUserClick(e) {
 	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
+		credentials: 'same-origin',
 		body: JSON.stringify(data),
 	})
 
@@ -1422,12 +1521,7 @@ async function deleteUserClick(e) {
 	}
 };
 
-// RENAME onClock
-async function renameUserClick(e) {
-	e.preventDefault();
-	n = this.id.replace("renameuser", "")
-
-	let text;
+async function renameUser(n) {
 	let newName = prompt("Please enter new user name");
 	if (newName == null || newName == "") {
 		return;
@@ -1444,21 +1538,20 @@ async function renameUserClick(e) {
 	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
+		credentials: 'same-origin',
 		body: JSON.stringify(data),
 	})
 
 	if (!response.ok) {
-		text = await response.text();
-		showStatusWindow(text);
+		showStatusWindow(await response.text());
 	} else {
-		 document.getElementById('username' + n).innerText = newName;
+		document.getElementById('username' + n).innerText = newName;
 	}
 };
-
 
 // REFRESH  onCLick
 async function refreshClick(e) {
@@ -1599,7 +1692,7 @@ async function flushKeysClick(e) {
 
 async function populateStream(item) {
 
-	id = '_' + document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value + '_' + item.Id
+	id = streamDomId(document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value, item.Id)
 
 	// Store value
 	streamsPrevParams.set(id, item.Stream)
@@ -1673,17 +1766,19 @@ async function populateStream(item) {
 	var vStreamId = 'vStreamId' + id
 	$('#' + vStreamId).empty();
 
-	sel = ""
-	if (item.Stream.VideoList != null && item.Stream.VideoList.length > 0 && item.Stream.VideoList[0].Id == "best") {
-		sel = "selected"
-	}
+	var videoSel = item.Stream.Video || "best";
+	sel = (videoSel == "best" || videoSel == "") ? "selected" : "";
 	$('#' + vStreamId).append('<option ' + sel + ' value="best">Best quality</option>');
+	sel = (videoSel == "all") ? "selected" : "";
+	$('#' + vStreamId).append('<option ' + sel + ' value="all">All qualities</option>');
 
-	sel = ""
 	if (item.Stream.VideoList != null) {
 		for (i=0; i<item.Stream.VideoList.length; i++) {
+			if (item.Stream.VideoList[i].Id == "best" || item.Stream.VideoList[i].Id == "all") {
+				continue
+			}
 			sel = ""
-			if (item.Stream.VideoList[i].Id == item.Stream.Video) {
+			if (item.Stream.VideoList[i].Id == videoSel) {
 				sel = "selected"
 			}
 
@@ -1907,32 +2002,94 @@ async function checkallChange(e) {
 	}
 
 	rowArray.forEach( function (row) {
-		id = /name(_[^_]*_[^"]*)/.exec(row[2])[1]
-		document.getElementById('checked' + id).checked = document.getElementById('checkall').checked;
+		id = parseNameDomId(row[2])
+		if (!id) {
+			return
+		}
+		var el = document.getElementById('checked' + id)
+		if (el) {
+			el.checked = document.getElementById('checkall').checked;
+		}
 	});
 }
 
-async function updateStreams(table, init) {
+var updateStreamsBusy = false;
+var updateStreamsPending = false;
+var updateStreamsInit = false;
+var streamsRendered = false;
 
+async function updateStreams(table, init) {
 	if (document.hidden) {
 		return
 	}
+	var sel = document.getElementById('providerSelection');
+	if (!sel || sel.selectedIndex < 0 || !sel.options.length) {
+		return
+	}
+	if (!streamsRendered) {
+		init = 1;
+	}
+	if (updateStreamsBusy) {
+		updateStreamsPending = true;
+		updateStreamsInit = updateStreamsInit || !!init;
+		return
+	}
+	updateStreamsBusy = true;
+	try {
+		await updateStreamsBody(table, init, sel.options[sel.selectedIndex].value);
+		if (init) {
+			streamsRendered = true;
+		}
+	} catch (err) {
+		console.error(err);
+	} finally {
+		updateStreamsBusy = false;
+		if (updateStreamsPending) {
+			var pending = updateStreamsInit ? 1 : 0;
+			updateStreamsPending = false;
+			updateStreamsInit = false;
+			updateStreams(table, pending);
+		}
+	}
+}
 
-	idsList = getVisibleIds(init);
-
-	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+function requestConf(providerId, idsList) {
+	return fetch(document.getElementById('baseUrl').value+'api/action', {
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
+		credentials: 'same-origin',
+		body: JSON.stringify({
+			Action : "getconf",
+			ProviderId : providerId,
+			Streams: [  { "Id" : idsList, } ]
+		}),
+	})
+}
+
+async function updateStreamsBody(table, init, providerId) {
+	idsList = getVisibleIds();
+
+	var pendingConf = null;
+	if (init) {
+		pendingConf = requestConf(providerId, idsList).catch(function () { return null });
+	}
+
+	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		credentials: 'same-origin',
 		body: JSON.stringify({
 					Action : "getstatus",
-					ProviderId : document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value,
+					ProviderId : providerId,
 					Streams: [  { "Id" : idsList, }, ]
 					}),
-	}).catch(error => { showStatusWindow('remote server unreachable'); clearInterval(intervalId); intervalId = 0;});
+	}).catch(error => { showStatusWindow('remote server unreachable'); clearInterval(intervalId); intervalId = 0; return null;});
 
-	if (intervalId == 0) {
+	if (intervalId == 0 || !response) {
 		return
 	}
 
@@ -1941,20 +2098,18 @@ async function updateStreams(table, init) {
 	text = await response.text();
 	if (!response.ok) {
 		showStatusWindow(text);
+		return
 	}
 
 	data = JSON.parse(text);
 
-	// CHECK ADD/DELETE
-	if (document.getElementById('filterselection').selectedIndex > 0 && (data.StreamsCount != table.rows().count())) {
-		if (data.Providers[0].Id != document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value) {
-			// Skip update, it was not meant for us
-			//console.log(" channels count changed, but providers are different, skip")
+	if (document.getElementById('filterselection') && document.getElementById('filterselection').selectedIndex > 0 && (data.StreamsCount != table.rows().count())) {
+		if (data.Providers && data.Providers[0] && data.Providers[0].Id != providerId) {
 			return
 		}
-		console.log("channels count changed, reloading", data.StreamsCount, table.rows().count())
 		clearInterval(intervalId);
 		location.reload();
+		return
 	}
 
 	// Build list of channels to update
@@ -1966,8 +2121,9 @@ async function updateStreams(table, init) {
 					if (PChangeCounter[stream.Id] == undefined) {
 						PChangeCounter[stream.Id] = -1;
 					}
-		
-					if (init || stream.PChangeCounter > PChangeCounter[stream.Id] ) {
+
+					var id = streamDomId(provider.Id, stream.Id)
+					if (init || !document.getElementById('startStop' + id) || stream.PChangeCounter > PChangeCounter[stream.Id] ) {
 						idsList += stream.Id + ","
 					}
 
@@ -1982,22 +2138,17 @@ async function updateStreams(table, init) {
 		GlobalChangeCounter = -1;
 	}
 
-	if (idsList != '' || data.GlobalChangeCounter > GlobalChangeCounter) {
-		let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-			method: 'POST', // or 'PUT'
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				Action : "getconf",
-				ProviderId : document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value,
-				Streams: [  { "Id" : idsList, } ]
-			}),
-		})
+	if (idsList != '' || pendingConf || data.GlobalChangeCounter > GlobalChangeCounter) {
+		let response = pendingConf ? await pendingConf : await requestConf(providerId, idsList)
+
+		if (!response) {
+			return
+		}
 
 		text = await response.text();
 		if (!response.ok) {
 			showStatusWindow(text);
+			return
 		}
 
 		conf = JSON.parse(text);
@@ -2049,252 +2200,254 @@ async function updateStreams(table, init) {
 		}
 
 		if (conf.Streams) {
+			var rows = streamRows(table);
 			conf.Streams.forEach(function(streamtoupdate){
-				table.rows({ page: 'current' }).every( function (rowIdx, tableLoop, rowLoop ) {
-					id = /(_[^_]*_[^"]*)/.exec(table.rows().data()[rowIdx][2])[1]
+				var row = rows[streamtoupdate.Id];
+				if (!row) {
+					return
+				}
+				var rowIdx = row.index;
+				id = row.id;
 
-					if (streamtoupdate.Id == getStreamId(id)) {
-						if (init) {
-							table.cell({row:rowIdx, column:0}).data('<input class="form-check-input" type="checkbox" id="checked' + id + '"/>');
-							table.cell({row:rowIdx, column:1}).data('<button style="border-color: transparent;" type="button" class="btn" id="startStop' + id + '"></button>');
-							table.cell({row:rowIdx, column:3}).data('<div hidden id="statusfull' + id +'"></div><pre style="white-space: pre-wrap;" id="status' + id +'"></pre><pre style="white-space: pre-wrap;" id="streamerrors' + id +'"></pre><div hidden id="showerrordiv' + id +'"><br><button id="showerror' + id +'" type="button" class="btn btn-outline-primary btn-sm">show more</button></div>');
+				if (!document.getElementById('status' + id)) {
+					table.cell({row:rowIdx, column:0}).data('<input class="form-check-input" type="checkbox" id="checked' + id + '"/>');
+					table.cell({row:rowIdx, column:1}).data('<button style="border-color: transparent;" type="button" class="btn" id="startStop' + id + '"></button>');
+					table.cell({row:rowIdx, column:3}).data('<div hidden id="statusfull' + id +'"></div><pre style="white-space: pre-wrap;" id="status' + id +'"></pre><pre style="white-space: pre-wrap;" id="streamerrors' + id +'"></pre><div hidden id="showerrordiv' + id +'"><br><button id="showerror' + id +'" type="button" class="btn btn-outline-primary btn-sm">show more</button></div>');
 
 
-							celldata = `<aside class="flexname">
-								<select class="form-select" style="text-align:center; vertical-align:middle; font-weight: bold" disabled id="mode` + id + `" >
-									<option value="live">Live</option>
-									<option value="vod">VOD</option>
-								</select>
-								<div id=modeOverrideDiv` + id + `>
-									<hr>
-									<select style='text-align:center; vertical-align:middle; font-weight: bold' id="runningmode` + id + `" class="form-select">
-										<option value="internalremuxer">Internal remuxer</option>`
-							if (!data.InternalUdpOnly) {
-								 celldata += `	<option value="residentffmpeg">FFmpeg resident</option>
-										<option value="ffmpeg">FFmpeg TS HLS/Direct</option>
-										<option value="ffmpegmulti">FFmpeg MultiTS HLS</option>
-									     	<option value="fmp4hls">FMP4 HLS</option>`
-							}
-							celldata +=` 	</select>
-									<div id=outputmodeDiv` + id + `>
-										<select style='text-align:center; vertical-align:middle; font-weight: bold' id="outputmode` + id + `" class="form-select">`
-							if (!data.InternalUdpOnly) {
-								celldata += `			<option value="directhls">Direct/HLS</option>
-									     			<option value="srtserver">SRT Server</option>`
-							}
-							celldata +=			       `<option value="protooutput">UDP/SRT</option>
-												<option value="custom">Custom</option>
-										</select>
-									</div>
-								</div>
-							</aside>`
-							table.cell({row:rowIdx, column:4}).data(celldata);
-							table.cell({row:rowIdx, column:5}).data(`
-							<aside class="flexname">
-								<input type="submit" class="btn btn-outline-primary btn-sm" id="showheaders` + id + `" value="show script headers" />
-								<br>
-								<div id="headersDiv` + id + `">
-									<br>
-									<textarea class="form-control" disabled" placeholder="manifest headers" id="headersmanifest` + id + `" cols="20" rows="2"></textarea>
-									<textarea class="form-control" disabled" placeholder="media headers" id="headersmedia` + id + `" cols="20" rows="2"></textarea>
-									<br>
-								</div>
-								<div class="input-group mb-4">
-									<div class="input-group-prepend center-block">
-										<input class="form-control" placeholder="param1 param2..." aria-label="manifestScript"  id="manifestscript` + id + `" type="text" value=""/>
-										<input class="form-control" placeholder="url" aria-label="manifestURL"  id="manifestUrl` + id + `" type="text" value=""/>
-									</div>
-									<input  type="submit" class="btn btn-outline-primary btn-sm" name="refresh" id="refresh` + id + `" value="R" />
-								</div>
-								<div id=networkDiv` + id + `>
-									<hr>
-									<select class="selectpicker" multiple id="networkscope` + id + `">
-										<option value="script">Script</option>
-										<option value="manifest">Manifest</option>
-										<option value="media">Media files</option>
-									</select>
-									<br>
-									<br>
-									<input class="form-control" placeholder="http/socks5 proxy" aria-label="url" id="proxy` + id + `" type="text"/>
-									<input class="form-control" placeholder="bind" aria-label="bind" id="bind` + id + `" type="text"/>
-									<input class="form-control" placeholder="dns over https" aria-label="url" id="doh` + id + `" type="text"/>
-								</div>
-								<div style="display: flex;" id="networkInfoDiv` + id + `">
-									<div id="networkInfo` + id + `"></div>
-								</div>
-							</aside>`);
-							table.cell({row:rowIdx, column:6}).data(`
-							<div style="display: flex; text-align: start;" class="frame" id="manifestInfoDiv` + id + `">
-								<img style="object-fit: contain;" id="qualitylogo` + id + `" width="40">
-								<div>&nbsp;</div>
-								<div>&nbsp;</div>
-								<div id="manifestInfo` + id + `"></div>
-							</div>
-							<br>
-							<div class="container mt-2" id="vStreamIdDiv` + id + `">
-								<select class="selectpicker" disabled id="vStreamId` + id + `"></select>
-							</div>
-							<div class="container mt-2" id="aStreamIdDiv` + id + `">
-								<select class="selectpicker" disabled multiple id="aStreamId` + id + `"></select>
-							</div>
-							<div class="container mt-2" id="sStreamIdDiv` + id + `">
-								<select class="selectpicker" disabled multiple id="sStreamId` + id + `"></select>
-							</div>
-							<div id="timeRangeDiv` + id + `">
-								<br>
-								<div  style="display: flex;">
-									<input id="rangeStartDate` + id + `" class="form-control" type="date" />
-									<input id="rangeStartTime` + id + `" class="form-control" type="time" />
-								</div>
-								<div style="display: flex;">
-									<input id="rangeEndDate` + id + `" class="form-control" type="date" />
-									<input id="rangeEndTime` + id + `" class="form-control" type="time" />
-								</div>
-							</div>`);
-							table.cell({row:rowIdx, column:7}).data(`
-							<div id="cdmdiv` + id + `">
-								<div style="display: flex;">
-									<select disabled class="form-select form-select-sm" style="width:150px; margin:0 auto;display:block;" id="cdmtype` + id + `" >
-										<option value="widevine">Widevine</option>
-										<option value="playready">Playready</option>
-										<option value="verimatrix">Verimatrix</option>
-									</select>
-									<select disabled class="form-select form-select-sm" style="width:150px; margin:0 auto;display:block;" id="cdmmode` + id + `" >
-										<option value="internal">Internal</option>
-										<option value="external">External</option>
-									</select>
-									<input id="prparamsbutton` + id + `" style='width: 20x;' type="submit" value="&#9661;" class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#prparams` + id + `" aria-expanded="false" aria-controls="prparams` + id + `"/>
-								</div>
-								<br>
-								<div id="prparams` + id + `" class="collapse">
-									<textarea class="form-control" disabled placeholder="LA version" id="prlaversion` + id + `" cols="39" rows="1"></textarea>
-									<textarea class="form-control" disabled placeholder="Client version" id="prclientversion` + id + `" cols="39" rows="1"></textarea>
-									<textarea class="form-control" disabled placeholder="Custom data" id="prcustomdata` + id + `" cols="39" rows="1"></textarea>
-									<br>
-								</div>
-								<div style="display: flex;">
-									<textarea class="form-control" disabled placeholder="param1 param2..." id="cdm` + id + `" rows="1"></textarea>
-									&nbsp;
-									<input  type="submit" class="btn btn-outline-primary btn-sm" name="refreshkeys" id="refreshkeys` + id + `" value="R" />
-								</div>
-							</div>
-							<br>
-							<div style="display: flex;">
-								<textarea class="form-control" disabled placeholder="kid1:key1..." id="keys` + id + `" cols="39" rows="3"></textarea>
-								&nbsp;
-								<input style="border-color: red; color: red;" type="submit" class="btn btn-outline-primary btn-sm" name="flushkeys" id="flushkeys` + id + `" value="X" />
-							</div>
-							<br>`);
-
-							content=`<div style="overflow-y: scroll; height: 65%" id="checkboxes` + id + `">
-							<div class="form-check" title="Autostart stream on startup.">
-								<input class="form-check-input" type="checkbox" id="autostart` + id + `" />
-								<label class="form-check-label" for="autostart` + id + `">Autostart</label>
-							</div>
-							<div class="form-check" title="Start stream only when requested.">
-								<input class="form-check-input" disabled type="checkbox" id="ondemand` + id + `" />
-								<label class="form-check-label" for="ondemand` + id + `">On demand</label>
-							</div>
-							<div class="form-check" title="Speed up fragments download. Download them simultaneously.">
-								<input class="form-check-input" disabled type="checkbox" id="speedup` + id + `" />
-								<label class="form-check-label" for="speedUp` + id + `">Speed up</label>
-							</div>
-							<div class="form-check" title="Call the provider script to get the manifest. Useful when the manifest comes with a session token.">
-								<input class="form-check-input" disabled type="checkbox" id="sessionmanifest` + id + `" />
-								<label class="form-check-label" for="sessionManifest` + id + `">Session manifest</label>
-							</div>
-							<div class="form-check" title="Call the provider script to retrieve stream keys.">
-								<input class="form-check-input" disabled type="checkbox" id="usecdm` + id + `" />
-								<label class="form-check-label" for="useCdm` + id + `">CDM script</label>
-							</div>
-							<div class="form-check" title="Override provider network settings">
-								<input class="form-check-input" disabled type="checkbox" id="network` + id + `" />
-								<label class="form-check-label" for="network` + id + `">Network override</label>
-							</div>
-							<div class="form-check" title="Override provider running and output modes">
-								<input class="form-check-input" disabled type="checkbox" id="modeoverride` + id + `" />
-								<label class="form-check-label" for="network` + id + `">Mode override</label>
-							</div>
-							<div class="form-check" title="Record event and create a replay entry.">
-								<input class="form-check-input" type="checkbox" id="recordevent` + id + `" />
-								<label class="form-check-label" for="recordevent` + id + `">Record event</label>
-							</div>
-							<div class="form-check" title="Ignore channels/events updates for this stream.">
-								<input class="form-check-input" type="checkbox" id="ignoreupdate` + id + `" />
-								<label class="form-check-label" for="ignoreUpdate` + id + `">Ignore update</label>
-							</div>
-							<div class="form-check" title="Fix IV size for some providers.">
-								<input class="form-check-input" disabled type="checkbox" id="fixivsize` + id + `" />
-								<label class="form-check-label" for="fixivsize` + id + `">Fix IV size</label>
-							</div>
-							<div class="form-check" title="Use time range. VOD mode must be set.">
-								<input class="form-check-input" disabled type="checkbox" id="timerange` + id + `" />
-								<label class="form-check-label" for="timerange` + id + `">Time range</label>
-							</div>
-							</div>
-							<div id="pipeoutputparamsDiv` + id + `">
-								<div class="input-group mb-3">
-									<span style='width: 65px;' class="input-group-text">Pipe</span>
-									<input class="form-control" placeholder="params" aria-label="params" id="pipeoutputparams` + id + `" type="text"/>
-								</div>
-							</div>
-							<div id="protooutputparamsDiv` + id + `">
-								<div class="input-group mb-3">
-									<span style='width: 65px;' class="input-group-text">UDP/SRT</span>
-									<input class="form-control" placeholder="params" aria-label="params" id="protooutputparams` + id + `" type="text"/>
-								</div>
-							</div>`
-							table.cell({row:rowIdx, column:8}).data(content);
-
-							document.getElementById('name' + id).onclick = setPlayer;
-							document.getElementById('renamestream' + id).onclick = renameStreamClick;
-							document.getElementById('showerror' + id).onclick = showErrorLogWindow;
-							document.getElementById('mode' + id).onchange = updateStream;
-							document.getElementById('runningmode' + id).onchange = updateStream;
-							document.getElementById('outputmode' + id).onchange = updateStream;
-							document.getElementById('manifestscript' + id).onchange = updateStream;
-							document.getElementById('manifestUrl' + id).onchange = updateStream;
-							document.getElementById('showheaders' + id).onclick = showHideHeaders;
-							$('#vStreamId' + id).on('hidden.bs.select', updateStream);
-							$('#aStreamId' + id).on('hidden.bs.select', updateStream);
-							$('#sStreamId' + id).on('hidden.bs.select', updateStream);
-							document.getElementById('cdm' + id).onchange = updateStream;
-							document.getElementById('cdmtype' + id).onchange = updateStream;
-							document.getElementById('cdmmode' + id).onchange = updateStream;
-							document.getElementById('prlaversion' + id).onchange = updateStream;
-							document.getElementById('prclientversion' + id).onchange = updateStream;
-							document.getElementById('prcustomdata' + id).onchange = updateStream;
-							document.getElementById('keys' + id).onchange = updateStream;
-							document.getElementById('autostart' + id).onchange = updateStream;
-							document.getElementById('ondemand' + id).onchange = updateStream;
-							document.getElementById('pipeoutputparams' + id).onchange = updateStream;
-							document.getElementById('protooutputparams' + id).onchange = updateStream;
-							document.getElementById('sessionmanifest' + id).onchange = updateStream;
-							document.getElementById('speedup' + id).onchange = updateStream;
-							document.getElementById('usecdm' + id).onchange = updateStream;
-							document.getElementById('network' + id).onchange = updateStream;
-							document.getElementById('modeoverride' + id).onchange = updateStream;
-							document.getElementById('recordevent' + id).onchange = updateStream;
-							document.getElementById('ignoreupdate' + id).onchange = updateStream;
-							document.getElementById('fixivsize' + id).onchange = updateStream;
-							document.getElementById('timerange' + id).onchange = updateStream;
-							document.getElementById('bind' + id).onchange = updateStream;
-							document.getElementById('proxy' + id).onchange = updateStream;
-							document.getElementById('doh' + id).onchange = updateStream;
-							document.getElementById('networkscope' + id).onchange = updateStream;
-							document.getElementById('rangeStartDate' + id).onchange = updateStream;
-							document.getElementById('rangeStartTime' + id).onchange = updateStream;
-							document.getElementById('rangeEndDate' + id).onchange = updateStream;
-							document.getElementById('rangeEndTime' + id).onchange = updateStream;
-							document.getElementById('startStop' + id).onclick = startStopClick;
-							document.getElementById('refresh' + id).onclick = refreshClick;
-							document.getElementById('refreshkeys' + id).onclick = refreshKeysClick;
-							document.getElementById('flushkeys' + id).onclick = flushKeysClick;
-						}
-
-						populateStream(streamtoupdate)
+					celldata = `<aside class="flexname">
+						<select class="form-select" style="text-align:center; vertical-align:middle; font-weight: bold" disabled id="mode` + id + `" >
+							<option value="live">Live</option>
+							<option value="vod">VOD</option>
+						</select>
+						<div id=modeOverrideDiv` + id + `>
+							<hr>
+							<select style='text-align:center; vertical-align:middle; font-weight: bold' id="runningmode` + id + `" class="form-select">
+								<option value="internalremuxer">Internal remuxer</option>`
+					if (!data.InternalUdpOnly) {
+						 celldata += `	<option value="residentffmpeg">FFmpeg resident</option>
+								<option value="ffmpeg">FFmpeg TS HLS/Direct</option>
+								<option value="ffmpegmulti">FFmpeg MultiTS HLS</option>
+							     	<option value="fmp4hls">FMP4 HLS</option>`
 					}
-				});
+					celldata +=` 	</select>
+							<div id=outputmodeDiv` + id + `>
+								<select style='text-align:center; vertical-align:middle; font-weight: bold' id="outputmode` + id + `" class="form-select">`
+					if (!data.InternalUdpOnly) {
+						celldata += `			<option value="directhls">Direct/HLS</option>
+							     			<option value="srtserver">SRT Server</option>`
+					}
+					celldata +=			       `<option value="protooutput">UDP/SRT</option>
+										<option value="custom">Custom</option>
+								</select>
+							</div>
+						</div>
+					</aside>`
+					table.cell({row:rowIdx, column:4}).data(celldata);
+					table.cell({row:rowIdx, column:5}).data(`
+					<aside class="flexname">
+						<input type="submit" class="btn btn-outline-primary btn-sm" id="showheaders` + id + `" value="show script headers" />
+						<br>
+						<div id="headersDiv` + id + `">
+							<br>
+							<textarea class="form-control" disabled placeholder="manifest headers" id="headersmanifest` + id + `" cols="20" rows="2"></textarea>
+							<textarea class="form-control" disabled placeholder="media headers" id="headersmedia` + id + `" cols="20" rows="2"></textarea>
+							<br>
+						</div>
+						<div class="input-group mb-4">
+							<div class="input-group-prepend center-block">
+								<input class="form-control" placeholder="param1 param2..." aria-label="manifestScript"  id="manifestscript` + id + `" type="text" value=""/>
+								<input class="form-control" placeholder="url" aria-label="manifestURL"  id="manifestUrl` + id + `" type="text" value=""/>
+							</div>
+							<input  type="submit" class="btn btn-outline-primary btn-sm" name="refresh" id="refresh` + id + `" value="R" />
+						</div>
+						<div id=networkDiv` + id + `>
+							<hr>
+							<select class="selectpicker" multiple id="networkscope` + id + `">
+								<option value="script">Script</option>
+								<option value="manifest">Manifest</option>
+								<option value="media">Media files</option>
+							</select>
+							<br>
+							<br>
+							<input class="form-control" placeholder="http/socks5 proxy" aria-label="url" id="proxy` + id + `" type="text"/>
+							<input class="form-control" placeholder="bind" aria-label="bind" id="bind` + id + `" type="text"/>
+							<input class="form-control" placeholder="dns over https" aria-label="url" id="doh` + id + `" type="text"/>
+						</div>
+						<div style="display: flex;" id="networkInfoDiv` + id + `">
+							<div id="networkInfo` + id + `"></div>
+						</div>
+					</aside>`);
+					table.cell({row:rowIdx, column:6}).data(`
+					<div style="display: flex; text-align: start;" class="frame" id="manifestInfoDiv` + id + `">
+						<img style="object-fit: contain;" id="qualitylogo` + id + `" width="40">
+						<div>&nbsp;</div>
+						<div>&nbsp;</div>
+						<div id="manifestInfo` + id + `"></div>
+					</div>
+					<br>
+					<div class="container mt-2" id="vStreamIdDiv` + id + `">
+						<select class="selectpicker" disabled id="vStreamId` + id + `"></select>
+					</div>
+					<div class="container mt-2" id="aStreamIdDiv` + id + `">
+						<select class="selectpicker" disabled multiple id="aStreamId` + id + `"></select>
+					</div>
+					<div class="container mt-2" id="sStreamIdDiv` + id + `">
+						<select class="selectpicker" disabled multiple id="sStreamId` + id + `"></select>
+					</div>
+					<div id="timeRangeDiv` + id + `">
+						<br>
+						<div  style="display: flex;">
+							<input id="rangeStartDate` + id + `" class="form-control" type="date" />
+							<input id="rangeStartTime` + id + `" class="form-control" type="time" />
+						</div>
+						<div style="display: flex;">
+							<input id="rangeEndDate` + id + `" class="form-control" type="date" />
+							<input id="rangeEndTime` + id + `" class="form-control" type="time" />
+						</div>
+					</div>`);
+					table.cell({row:rowIdx, column:7}).data(`
+					<div id="cdmdiv` + id + `">
+						<div style="display: flex;">
+							<select disabled class="form-select form-select-sm" style="width:150px; margin:0 auto;display:block;" id="cdmtype` + id + `" >
+								<option value="widevine">Widevine</option>
+								<option value="playready">Playready</option>
+								<option value="verimatrix">Verimatrix</option>
+							</select>
+							<select disabled class="form-select form-select-sm" style="width:150px; margin:0 auto;display:block;" id="cdmmode` + id + `" >
+								<option value="internal">Internal</option>
+								<option value="external">External</option>
+							</select>
+							<input id="prparamsbutton` + id + `" style='width: 20x;' type="submit" value="&#9661;" class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#prparams` + id + `" aria-expanded="false" aria-controls="prparams` + id + `"/>
+						</div>
+						<br>
+						<div id="prparams` + id + `" class="collapse">
+							<textarea class="form-control" disabled placeholder="LA version" id="prlaversion` + id + `" cols="39" rows="1"></textarea>
+							<textarea class="form-control" disabled placeholder="Client version" id="prclientversion` + id + `" cols="39" rows="1"></textarea>
+							<textarea class="form-control" disabled placeholder="Custom data" id="prcustomdata` + id + `" cols="39" rows="1"></textarea>
+							<br>
+						</div>
+						<div style="display: flex;">
+							<textarea class="form-control" disabled placeholder="param1 param2..." id="cdm` + id + `" rows="1"></textarea>
+							&nbsp;
+							<input  type="submit" class="btn btn-outline-primary btn-sm" name="refreshkeys" id="refreshkeys` + id + `" value="R" />
+						</div>
+					</div>
+					<br>
+					<div style="display: flex;">
+						<textarea class="form-control" disabled placeholder="kid1:key1..." id="keys` + id + `" cols="39" rows="3"></textarea>
+						&nbsp;
+						<input style="border-color: red; color: red;" type="submit" class="btn btn-outline-primary btn-sm" name="flushkeys" id="flushkeys` + id + `" value="X" />
+					</div>
+					<br>`);
+
+					content=`<div style="overflow-y: scroll; height: 65%" id="checkboxes` + id + `">
+					<div class="form-check" title="Autostart stream on startup.">
+						<input class="form-check-input" type="checkbox" id="autostart` + id + `" />
+						<label class="form-check-label" for="autostart` + id + `">Autostart</label>
+					</div>
+					<div class="form-check" title="Start stream only when requested.">
+						<input class="form-check-input" disabled type="checkbox" id="ondemand` + id + `" />
+						<label class="form-check-label" for="ondemand` + id + `">On demand</label>
+					</div>
+					<div class="form-check" title="Speed up fragments download. Download them simultaneously.">
+						<input class="form-check-input" disabled type="checkbox" id="speedup` + id + `" />
+						<label class="form-check-label" for="speedUp` + id + `">Speed up</label>
+					</div>
+					<div class="form-check" title="Call the provider script to get the manifest. Useful when the manifest comes with a session token.">
+						<input class="form-check-input" disabled type="checkbox" id="sessionmanifest` + id + `" />
+						<label class="form-check-label" for="sessionManifest` + id + `">Session manifest</label>
+					</div>
+					<div class="form-check" title="Call the provider script to retrieve stream keys.">
+						<input class="form-check-input" disabled type="checkbox" id="usecdm` + id + `" />
+						<label class="form-check-label" for="useCdm` + id + `">CDM script</label>
+					</div>
+					<div class="form-check" title="Override provider network settings">
+						<input class="form-check-input" disabled type="checkbox" id="network` + id + `" />
+						<label class="form-check-label" for="network` + id + `">Network override</label>
+					</div>
+					<div class="form-check" title="Override provider running and output modes">
+						<input class="form-check-input" disabled type="checkbox" id="modeoverride` + id + `" />
+						<label class="form-check-label" for="network` + id + `">Mode override</label>
+					</div>
+					<div class="form-check" title="Record event and create a replay entry.">
+						<input class="form-check-input" type="checkbox" id="recordevent` + id + `" />
+						<label class="form-check-label" for="recordevent` + id + `">Record event</label>
+					</div>
+					<div class="form-check" title="Ignore channels/events updates for this stream.">
+						<input class="form-check-input" type="checkbox" id="ignoreupdate` + id + `" />
+						<label class="form-check-label" for="ignoreUpdate` + id + `">Ignore update</label>
+					</div>
+					<div class="form-check" title="Fix IV size for some providers.">
+						<input class="form-check-input" disabled type="checkbox" id="fixivsize` + id + `" />
+						<label class="form-check-label" for="fixivsize` + id + `">Fix IV size</label>
+					</div>
+					<div class="form-check" title="Use time range. VOD mode must be set.">
+						<input class="form-check-input" disabled type="checkbox" id="timerange` + id + `" />
+						<label class="form-check-label" for="timerange` + id + `">Time range</label>
+					</div>
+					</div>
+					<div id="pipeoutputparamsDiv` + id + `">
+						<div class="input-group mb-3">
+							<span style='width: 65px;' class="input-group-text">Pipe</span>
+							<input class="form-control" placeholder="params" aria-label="params" id="pipeoutputparams` + id + `" type="text"/>
+						</div>
+					</div>
+					<div id="protooutputparamsDiv` + id + `">
+						<div class="input-group mb-3">
+							<span style='width: 65px;' class="input-group-text">UDP/SRT</span>
+							<input class="form-control" placeholder="params" aria-label="params" id="protooutputparams` + id + `" type="text"/>
+						</div>
+					</div>`
+					table.cell({row:rowIdx, column:8}).data(content);
+
+					document.getElementById('name' + id).onclick = setPlayer;
+					document.getElementById('renamestream' + id).onclick = renameStreamClick;
+					document.getElementById('showerror' + id).onclick = showErrorLogWindow;
+					document.getElementById('mode' + id).onchange = updateStream;
+					document.getElementById('runningmode' + id).onchange = updateStream;
+					document.getElementById('outputmode' + id).onchange = updateStream;
+					document.getElementById('manifestscript' + id).onchange = updateStream;
+					document.getElementById('manifestUrl' + id).onchange = updateStream;
+					document.getElementById('showheaders' + id).onclick = showHideHeaders;
+					$('#vStreamId' + id).on('hidden.bs.select', updateStream);
+					$('#aStreamId' + id).on('hidden.bs.select', updateStream);
+					$('#sStreamId' + id).on('hidden.bs.select', updateStream);
+					document.getElementById('cdm' + id).onchange = updateStream;
+					document.getElementById('cdmtype' + id).onchange = updateStream;
+					document.getElementById('cdmmode' + id).onchange = updateStream;
+					document.getElementById('prlaversion' + id).onchange = updateStream;
+					document.getElementById('prclientversion' + id).onchange = updateStream;
+					document.getElementById('prcustomdata' + id).onchange = updateStream;
+					document.getElementById('keys' + id).onchange = updateStream;
+					document.getElementById('autostart' + id).onchange = updateStream;
+					document.getElementById('ondemand' + id).onchange = updateStream;
+					document.getElementById('pipeoutputparams' + id).onchange = updateStream;
+					document.getElementById('protooutputparams' + id).onchange = updateStream;
+					document.getElementById('sessionmanifest' + id).onchange = updateStream;
+					document.getElementById('speedup' + id).onchange = updateStream;
+					document.getElementById('usecdm' + id).onchange = updateStream;
+					document.getElementById('network' + id).onchange = updateStream;
+					document.getElementById('modeoverride' + id).onchange = updateStream;
+					document.getElementById('recordevent' + id).onchange = updateStream;
+					document.getElementById('ignoreupdate' + id).onchange = updateStream;
+					document.getElementById('fixivsize' + id).onchange = updateStream;
+					document.getElementById('timerange' + id).onchange = updateStream;
+					document.getElementById('bind' + id).onchange = updateStream;
+					document.getElementById('proxy' + id).onchange = updateStream;
+					document.getElementById('doh' + id).onchange = updateStream;
+					document.getElementById('networkscope' + id).onchange = updateStream;
+					document.getElementById('rangeStartDate' + id).onchange = updateStream;
+					document.getElementById('rangeStartTime' + id).onchange = updateStream;
+					document.getElementById('rangeEndDate' + id).onchange = updateStream;
+					document.getElementById('rangeEndTime' + id).onchange = updateStream;
+					document.getElementById('startStop' + id).onclick = startStopClick;
+					document.getElementById('refresh' + id).onclick = refreshClick;
+					document.getElementById('refreshkeys' + id).onclick = refreshKeysClick;
+					document.getElementById('flushkeys' + id).onclick = flushKeysClick;
+				}
+
+				populateStream(streamtoupdate)
 			});
 		}
 	}
@@ -2309,7 +2462,7 @@ async function updateStreams(table, init) {
 		data.Providers.forEach(function(provider){
 			if (provider.Streams) {
 				provider.Streams.forEach(function(stream){
-					let n = '_' + provider.Id + '_' + stream.Id;
+					let n = streamDomId(provider.Id, stream.Id);
 
 					if (document.getElementById('name' + n)) {
 						if (!document.getElementById('startStop' + n)) {
@@ -2607,7 +2760,7 @@ async function updateStatus() {
 	data.Providers.forEach(function(provider){
 		if (provider.Streams) {
 			provider.Streams.forEach(function(stream){
-				let n = '_' + provider.Id + '_' + stream.Id;
+				let n = streamDomId(provider.Id, stream.Id);
 				if (document.getElementById('name' + n)) {
 					document.getElementById('name' + n).href = stream.StreamingUrl;
 
@@ -3060,36 +3213,26 @@ function hideLoading(loader) {
 	loader.classList.remove("display");
 }
 
-function filterOnChange() {
-	if (document.URL.includes("/config")) {
-		page = "config"
-	} else {
-		page = "status"
-	}
+function selectedPage() {
+	return document.URL.includes("/config") ? "config" : "status"
+}
 
-	filter = document.getElementById('filterselection').options[document.getElementById('filterselection').selectedIndex].value;
-	if (document.getElementById('providerSelection').selectedIndex >= 0 ) {
-		window.location.href = "/" + page + "/" + document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value + "?filter=" + filter;
-	} else {
-		window.location.href = "/" + page + "/" + document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value; 
+function selectedProvider() {
+	var sel = document.getElementById('providerSelection');
+	if (sel && sel.selectedIndex >= 0) {
+		return sel.options[sel.selectedIndex].value
 	}
+	return window.location.pathname.split('/')[2] || "";
+}
+
+function filterOnChange() {
+	filter = document.getElementById('filterselection').options[document.getElementById('filterselection').selectedIndex].value;
+	window.location.href = "/" + selectedPage() + "/" + selectedProvider() + "?filter=" + filter;
 }
 
 async function filterDeleteOnClick(e) {
 	e.preventDefault();
-
-	if (document.URL.includes("/config")) {
-		page = "config"
-	} else {
-		page = "status"
-	}
-
-	if (document.getElementById('providerSelection').selectedIndex >= 0 ) {
-		window.location.href = "/" + page + "/" +  document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value;
-	} else {
-		window.location.href = "/" + page + "/";
-	}
-
+	window.location.href = "/" + selectedPage() + "/" + selectedProvider();
 }
 
 function showErrorLogWindow(e, id) {
@@ -3109,7 +3252,11 @@ function showErrorLogWindow(e, id) {
 }
 
 function showStatusWindow(error) {
-	bootbox.alert( { title:"Error" , message: '<pre>' + error + '</pre>'});
+	bootbox.alert({
+		title: "Error",
+		message: '<pre>' + error + '</pre>',
+		className: 'bootbox-error'
+	});
 }
 
 function getSelectedIds() {
@@ -3120,9 +3267,13 @@ function getSelectedIds() {
 
 	var idsList = ""
 	rowArray.forEach( function (row) {
-		id = /name(_[^_]*_[^"]*)/.exec(row[2])[1]
+		id = parseNameDomId(row[2])
+		if (!id) {
+			return
+		}
+		var el = document.getElementById('checked' + id)
 
-		if ((document.getElementById('checked' + id).checked)) {
+		if (el && el.checked) {
 			idsList += getStreamId(id) + ","
 		}
 	});
@@ -3132,7 +3283,18 @@ function getSelectedIds() {
 	return idsList;
 }
 
-function getVisibleIds(init) {
+function streamRows(table) {
+	var rows = {};
+	table.rows({ page: 'current' }).every( function (rowIdx) {
+		var id = parseNameDomId(this.data()[2]);
+		if (id) {
+			rows[getStreamId(id)] = { index: rowIdx, id: id };
+		}
+	});
+	return rows
+}
+
+function getVisibleIds() {
 	var rowArray = table.rows({ page: 'current' }).data().toArray();
 	if (rowArray == null) {
 		return ""
@@ -3140,8 +3302,12 @@ function getVisibleIds(init) {
 
 	var idsList = ""
 	rowArray.forEach( function (row) {
-		id = /name(_[^_]*_[^"]*)/.exec(row[2])[1]
-		if (isInViewport(document.getElementById('name' + id)) || (init && !document.getElementById('startStop' + id)) ) {
+		var id = parseNameDomId(row[2])
+		if (!id) {
+			return
+		}
+		var el = document.getElementById('name' + id)
+		if (!document.getElementById('startStop' + id) || (el && isInViewport(el))) {
 			idsList += getStreamId(id) + ","
 		}
 	});
@@ -3159,7 +3325,10 @@ function getPageIds(selectedOnly) {
 
 	var idsList = ""
 	rowArray.forEach( function (row) {
-		id = /name(_[^_]*_[^"]*)/.exec(row[2])[1]
+		id = parseNameDomId(row[2])
+		if (!id) {
+			return
+		}
 		idsList += getStreamId(id) + ","
 	});
 

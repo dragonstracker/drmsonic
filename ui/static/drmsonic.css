@@ -1,5 +1,159 @@
+body {
+	height: 100%;
+	background-color: black;
+	color: white;
+}
+
+hr {
+	color: white;
+}
+
+a {
+	color: white;
+}
+
+td, tr {
+	height: 1px;
+	text-align: center;
+	vertical-align: middle;
+}
+
+textarea {
+	resize: both;
+}
+
+.btn:focus, .btn:active {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.btn-outline-primary {
+	background-color: transparent;
+}
+
+.btn-outline-primary:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+.btn-outline-secondary {
+	background-color: transparent;
+}
+
+.btn-outline-secondary:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+.modal-header {
+	color: #111;
+	background-color: white;
+}
+
+.bootbox .modal-title {
+	color: #111;
+}
+
+.bootbox-error .modal-title {
+	color: #c62828;
+}
+
+.modal-body {
+	color: black;
+	background-color: white;
+}
+
+.modal-footer {
+	background-color: white;
+}
+
+.table-dark th {
+	color: white;
+	background-color: black;
+}
+
+* {
+	font-size: 12px;
+	line-height: 1.2;
+}
+
+.img-with-text {
+	text-align: center;
+	width: 150px;
+	height: 150px;
+	float: left;
+	font-weight: bold;
+}
+
+.img-with-text a {
+	display: block;
+	margin: 0 auto;
+}
+
+.center-block {
+	display: table;  /* Instead of display:block */
+	margin-left: auto;
+	margin-right: auto;
+	width: 80%
+}
+
+.frame{
+	border: 2px solid white;
+	display: flex;
+	margin-left: auto;
+	margin-right: auto;
+	float: center;
+	width: 80% !important;
+}
+
+.flexname {
+	min-height: 100%;
+	display: flex;
+	flex-flow: column nowrap;
+	justify-content: center;
+	align-items: center;
+}
+
+@keyframes spin {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+::-webkit-scrollbar {
+	-webkit-appearance: none;
+	width: 7px;
+}
+
+::-webkit-scrollbar-thumb {
+	border-radius: 4px;
+	background-color: rgba(0, 0, 0, .5);
+	-webkit-box-shadow: 0 0 1px rgba(255, 255, 255, .5);
+}
+
+#channelsloading, #eventsloading, #globalloading {
+	width: 2rem;
+	height: 2rem;
+	border: 5px solid white;
+	border-top: 6px solid blue;
+	border-radius: 100%;
+	margin: auto;
+	visibility: hidden;
+	animation: spin 1s infinite linear;
+}
+
+#channelsloading.display, #eventsloading.display, #globalloading.display{
+	visibility: visible;
+}
 #streamsTable tbody td {
 	vertical-align: top;
+}
+
+#streamsTable.channels tbody td {
+	height: 170px;
 }
 
 #streamsTable .form-check {

@@ -111,17 +111,14 @@ func runHLS(ctx context.Context, cfg Config, cb Callbacks) error {
 		update = 2 * time.Second
 	}
 
+	var (
+		idleAt    time.Time
+		loadFails int
+	)
+
 	for ctx.Err() == nil {
 		set := currentSegments(pl, cfg.Mode)
-		if len(set) == 0 {
-			wait(ctx, update)
-			fresh, _, err := load(mediaURL.String())
-			if err == nil {
-				pl = fresh
-			}
-			continue
-		}
-		if lastSeq < 0 {
+		if lastSeq < 0 && len(set) > 0 {
 			lastSeq = set[0].Seq - 1
 		}
 
@@ -135,7 +132,7 @@ func runHLS(ctx context.Context, cfg Config, cb Callbacks) error {
 
 			body, err := cl.Get(ctx, seg.URL)
 			if err != nil {
-				cb.Error(err.Error())
+				cb.Error(Describe(err))
 				continue
 			}
 			if seg.Key != nil && seg.Key.Method == "AES-128" {
@@ -149,7 +146,7 @@ func runHLS(ctx context.Context, cfg Config, cb Callbacks) error {
 				}
 				body, err = decryptAES128(key, iv, body)
 				if err != nil {
-					cb.Error(err.Error())
+					cb.Error(Describe(err))
 					continue
 				}
 			}
@@ -161,7 +158,7 @@ func runHLS(ctx context.Context, cfg Config, cb Callbacks) error {
 
 			samples, err := hlsSamples(body, hmedia, encrypted, keys)
 			if err != nil {
-				cb.Error(err.Error())
+				cb.Error(Describe(err))
 				continue
 			}
 			if len(samples) == 0 {
@@ -194,12 +191,34 @@ func runHLS(ctx context.Context, cfg Config, cb Callbacks) error {
 			}
 		}
 
-		if !progressed {
+		if progressed {
+			idleAt = time.Time{}
+		} else {
+			if pl.EndList || cfg.Mode == "replay" {
+				return endBroadcast(cb)
+			}
+			if idleAt.IsZero() {
+				idleAt = time.Now()
+			}
+			if time.Since(idleAt) > 15*time.Second {
+				cb.Status("Waiting for segments")
+			}
 			wait(ctx, update)
 		}
-		if fresh, _, err := load(mediaURL.String()); err == nil {
-			pl = fresh
+
+		fresh, _, err := load(mediaURL.String())
+		if err != nil {
+			loadFails++
+			if loadFails >= 2 {
+				if endedStatus(err) {
+					return endBroadcast(cb)
+				}
+				return fail(cb, err)
+			}
+			continue
 		}
+		loadFails = 0
+		pl = fresh
 	}
 	return nil
 }

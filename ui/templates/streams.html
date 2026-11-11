@@ -51,7 +51,7 @@
 
 		<br>
 
-		{{range $n, $p := .Providers}}
+		{{range $n, $p := .StreamTables}}
 			{{ if $p.Streams }}
 				<table class="cell-border compact stripe" border="0" width="100%" style="margin: auto;" id="streamsTable">
 					<thead>
@@ -69,7 +69,7 @@
 						<TR height="60px">
 						{{ end }}
 							<TD style='text-align:center; vertical-align:middle; font-weight: bold; border-bottom: 0;'>
-								<a id="name_{{$p.Id}}_{{$s.Id}}" type="button" class="btn btn-outline-primary"><font size="+4">{{$s.Name}}</font></a>
+								<a id="name_{{$p.Id}}~{{$s.Id}}" type="button" class="btn btn-outline-primary"><font size="+4">{{$s.Name}}</font></a>
 								<div style="line-height:20%;"><br></div>
 								<img id="qualitylogo_{{$p.Id}}_{{$s.Id}}" width="20">
 								{{ if $s.IsEvent }}&nbsp;&nbsp;&nbsp;<img data-bs-toggle="tooltip" data-bs-title="Event" style="width: 20px; height: auto;" src="static/event.svg"/>{{ end }}

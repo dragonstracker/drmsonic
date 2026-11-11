@@ -17,12 +17,12 @@ WORKDIR /app
 COPY --from=build /out/drmsonic /app/drmsonic
 COPY providers/example.json /app/providers/example.json
 
-RUN mkdir -p /app/providers && chown -R drmsonic:drmsonic /app
+RUN mkdir -p /app/providers /app/data && chown -R drmsonic:drmsonic /app
 
 USER drmsonic
 
 EXPOSE 7779
-VOLUME ["/app/providers"]
+VOLUME ["/app/providers", "/app/data"]
 
 ENTRYPOINT ["/app/drmsonic"]
-CMD ["-p", "7779", "-b", "0.0.0.0", "-providers", "providers"]
+CMD ["-p", "7779", "-b", "0.0.0.0", "-providers", "providers", "-c", "data/drmsonic.json"]

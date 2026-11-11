@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -33,19 +32,20 @@ type Callbacks struct {
 }
 
 type Config struct {
-	Name        string
-	ManifestURL string
-	Mode        string
-	Video       string
-	Audio       string
-	Keys        []string
-	UserAgent   string
-	Bind        string
-	Proxy       string
-	Doh         string
-	Headers     []string
-	Retries     int
-	FixIVSize   bool
+	Name         string
+	ManifestURL  string
+	Mode         string
+	Video        string
+	Audio        string
+	Keys         []string
+	UserAgent    string
+	Bind         string
+	Proxy        string
+	Doh          string
+	Headers      []string
+	Retries      int
+	FixIVSize    bool
+	AllowPrivate bool
 }
 
 type KeySet struct {
@@ -127,13 +127,14 @@ func decodeHex(s string) ([]byte, error) {
 
 func newClient(cfg Config) *fetch.Client {
 	return fetch.New(fetch.Options{
-		UserAgent: cfg.UserAgent,
-		Bind:      cfg.Bind,
-		Proxy:     cfg.Proxy,
-		Doh:       cfg.Doh,
-		Headers:   cfg.Headers,
-		Retries:   cfg.Retries,
-		Timeout:   25 * time.Second,
+		UserAgent:    cfg.UserAgent,
+		Bind:         cfg.Bind,
+		Proxy:        cfg.Proxy,
+		Doh:          cfg.Doh,
+		Headers:      cfg.Headers,
+		Retries:      cfg.Retries,
+		Timeout:      25 * time.Second,
+		AllowPrivate: cfg.AllowPrivate,
 	})
 }
 
@@ -154,9 +155,30 @@ func isHLSURL(u string) bool {
 }
 
 func fail(cb Callbacks, err error) error {
-	cb.Status(fmt.Sprintf("Error: %s", err.Error()))
-	cb.Error(err.Error())
+	cb.Status(ErrorStatus(err))
+	cb.Error(Describe(err))
 	return err
+}
+
+func ErrorStatus(err error) string {
+	short := Describe(err)
+	if raw := err.Error(); raw != short {
+		return "Error: " + short + "\n" + raw
+	}
+	return "Error: " + short
+}
+
+func endBroadcast(cb Callbacks) error {
+	cb.Status(ErrBroadcastEnded.Error())
+	return ErrBroadcastEnded
+}
+
+func endGrace(update time.Duration) time.Duration {
+	grace := 2 * update
+	if grace > 10*time.Second {
+		grace = 10 * time.Second
+	}
+	return grace
 }
 
 func shiftNegativeCTS(samples []avSample) {
@@ -187,7 +209,8 @@ func chooseVideo(tracks []manifest.Track, want string) *manifest.Track {
 	if len(tracks) == 0 {
 		return nil
 	}
-	if want != "" && want != "all" {
+	want = strings.TrimSpace(want)
+	if want != "" && want != "all" && want != "best" {
 		for i := range tracks {
 			if tracks[i].ID == want {
 				return &tracks[i]

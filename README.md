@@ -91,8 +91,10 @@ Open `http://127.0.0.1:7779/`.
 | `-baseurl` | request host | public URL written into playlists |
 | `-providers` | `providers` | providers directory |
 | `-c` | `drmsonic.json` | users/config file |
-| `-user` / `-password` | empty | static admin credentials |
+| `-user` / `-password` | empty | static admin credentials (both or neither) |
 | `-allow` | empty | comma separated IPs or CIDRs that skip auth |
+| `-trusted-proxies` | empty | proxies allowed to set `X-Forwarded-For` |
+| `-allow-private-fetch` | off | allow upstream fetches to private/loopback hosts |
 | `-l` | empty | log file |
 | `-v` | `0` | verbosity 1..3 |
 | `-noautostart` | off | do not start autostart streams |
@@ -119,20 +121,26 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-### Fresh VPS, one command (binary, like o11)
+### Fresh VPS, one command
 
-Every `v*` git tag publishes Linux amd64/arm64 + Windows binaries into GitHub Releases. Install on a clean VPS:
+Every `v*` git tag publishes Linux amd64/arm64 + Windows binaries into GitHub Releases. Every `devloper` push publishes the rolling prerelease tag `dev`. Install on a clean VPS:
 
 ```sh
-curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo bash
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/download/dev/install.sh | sudo bash
 ```
 
-That downloads the matching binary into `/home/drmsonic`, writes a systemd unit, opens port `7779`, and starts the service. Same shape as the o11 one-liner, without cloning source or installing a compiler. Run the same command again anytime to **upgrade** in place: it stops the service, replaces the binary, keeps `providers/`, rewrites the unit, and restarts.
+That downloads the binary into `/home/drmsonic`, writes a systemd unit, opens port `7779`, and starts the service. Run the same command again anytime to **upgrade** in place: it stops the service, replaces the binary, keeps `providers/`, rewrites the unit, and restarts. The panel footer must read `drmsonic dev-<sha>`; `v1.1.x` means a production `latest` installer was used.
+
+For a production build instead:
+
+```sh
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo DRMSONIC_TAG=latest bash
+```
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `DRMSONIC_REPO` | `dragonstracker/drmsonic` | GitHub owner/repo |
-| `DRMSONIC_TAG` | `latest` | release tag (`v1.1.0`) or `latest` |
+| `DRMSONIC_TAG` | `latest` | release tag (`latest`, `dev`, or `vX.Y.Z`) |
 | `DRMSONIC_DIR` | `/home/drmsonic` | install path |
 | `DRMSONIC_PORT` | `7779` | HTTP port |
 | `DRMSONIC_BIND` | `0.0.0.0` | bind address |
@@ -150,13 +158,45 @@ curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/u
 
 Same overrides as install: `DRMSONIC_DIR`, `DRMSONIC_PORT`, `DRMSONIC_SERVICE`, `DRMSONIC_CONTAINER`.
 
+### Clean reinstall of the dev build
+
+Wipe everything, then install the current `dev` prerelease:
+
+```sh
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/download/dev/uninstall.sh | sudo bash
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/download/dev/install.sh | sudo bash
+```
+
+Confirm the binary and panel footer show `drmsonic dev-<sha>`:
+
+```sh
+/home/drmsonic/drmsonic -version
+systemctl status drmsonic --no-pager
+```
+
+The wipe deletes `/home/drmsonic` including `drmsonic.json`, so the installer reseeds `admin` / `admin`.
+
+GitHub Actions artifacts (`actions/runs/.../artifacts/...`) are private to signed-in users and expire. The `dev` release assets are the same binaries and are public:
+
+```sh
+# binary only, already built for linux/amd64
+curl -fL -o /tmp/drmsonic https://github.com/dragonstracker/drmsonic/releases/download/dev/drmsonic-linux-amd64
+```
+
+One-off install from a local binary:
+
+```sh
+install -m 0755 /tmp/drmsonic /home/drmsonic/drmsonic
+systemctl restart drmsonic
+```
+
 Day two: `systemctl restart drmsonic`, `journalctl -u drmsonic -f`, `systemctl status drmsonic`.
 
 Publish a new release from this repo:
 
 ```sh
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.1.4
+git push origin v1.1.4
 ```
 
 GitHub Actions builds the binaries and attaches them to that tag's Release page.
@@ -171,6 +211,54 @@ GitHub Actions builds the binaries and attaches them to that tag's Release page.
 5. Play `http://<host>:7779/stream/<provider>/<stream>/master.m3u8`.
 
 A stream is keyed by `ProviderId/StreamId`; both appear in the playback URL.
+
+## Auth
+
+On first start (no passwords stored, and no `-user`/`-password` flags), drmsonic creates a default admin:
+
+| field | value |
+|-------|-------|
+| username | `admin` |
+| password | `admin` |
+
+Change it under **Users** after login. Auth stays on while any stored user has a password, or when both `-user` and `-password` are set on the CLI.
+
+- Panel: `/login` (session cookie). Logout from the top bar.
+- Optional **Open panel without login** on the Users page (`NoAuth` in `drmsonic.json`).
+- Playlists (o11-compatible user/pass paths):
+
+```
+http://host:7779/{username}/{password}/app1.conf
+hls://host:7779/{username}/{password}/stream/example/channel1/master.m3u8
+```
+
+Token paths `/t/<stream-token>/…` still work for fetch. Failed logins are rate-limited per IP.
+
+### Test `devloper` builds on a VPS
+
+Production (`main` tags → latest):
+
+```sh
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/latest/download/install.sh | sudo DRMSONIC_TAG=latest bash
+```
+
+Developer branch (rolling prerelease tag `dev`, updated on every `devloper` push):
+
+```sh
+curl -fsSL https://github.com/dragonstracker/drmsonic/releases/download/dev/install.sh | sudo bash
+```
+
+The `dev` release’s `install.sh` defaults to the `dev` binary. The panel must show `drmsonic dev-<sha>`. If it still says `v1.1.x`, you pulled production `latest` — use the URL above (not `releases/latest`).
+
+```sh
+# wrong: VAR= only applies to curl, not the piped bash
+DRMSONIC_TAG=dev curl ... | sudo -E bash
+
+# right if you need to override the tag explicitly
+curl -fsSL .../dev/install.sh | sudo DRMSONIC_TAG=dev bash
+```
+
+Same upgrade/wipe scripts work with the `dev` installer.
 
 ## ClearKey keys
 

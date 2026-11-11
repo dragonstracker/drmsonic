@@ -17,13 +17,14 @@ import (
 )
 
 type Options struct {
-	UserAgent string
-	Bind      string
-	Proxy     string
-	Doh       string
-	Headers   []string
-	Retries   int
-	Timeout   time.Duration
+	UserAgent    string
+	Bind         string
+	Proxy        string
+	Doh          string
+	Headers      []string
+	Retries      int
+	Timeout      time.Duration
+	AllowPrivate bool
 }
 
 type Client struct {
@@ -38,6 +39,15 @@ type Client struct {
 type dnsEntry struct {
 	addrs []net.IP
 	at    time.Time
+}
+
+type StatusError struct {
+	Code int
+	URL  string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("http %d for %s", e.Code, e.URL)
 }
 
 func New(opts Options) *Client {
@@ -93,6 +103,10 @@ func (c *Client) Get(ctx context.Context, rawURL string) ([]byte, error) {
 			return body, nil
 		}
 		last = err
+		var se *StatusError
+		if errors.As(err, &se) && se.Code < 500 {
+			break
+		}
 	}
 	return nil, last
 }
@@ -102,6 +116,9 @@ func (c *Client) GetRange(ctx context.Context, rawURL, byteRange string) ([]byte
 }
 
 func (c *Client) get(ctx context.Context, rawURL, byteRange string) ([]byte, error) {
+	if err := c.checkURL(rawURL); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, err
@@ -127,7 +144,7 @@ func (c *Client) get(ctx context.Context, rawURL, byteRange string) ([]byte, err
 
 	if resp.StatusCode >= 400 {
 		io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("http %d for %s", resp.StatusCode, rawURL)
+		return nil, &StatusError{Code: resp.StatusCode, URL: rawURL}
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -136,31 +153,64 @@ func (c *Client) get(ctx context.Context, rawURL, byteRange string) ([]byte, err
 	return body, nil
 }
 
+func (c *Client) checkURL(rawURL string) error {
+	if c.opts.AllowPrivate {
+		return nil
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return err
+	}
+	host := u.Hostname()
+	if host == "" {
+		return errors.New("empty host")
+	}
+	if ip := net.ParseIP(host); ip != nil && blockedIP(ip) {
+		return fmt.Errorf("blocked address %s", host)
+	}
+	return nil
+}
+
+func blockedIP(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
+}
+
 func (c *Client) dialContext(dialer *net.Dialer) func(context.Context, string, string) (net.Conn, error) {
-	if c.opts.Doh == "" {
-		return dialer.DialContext
+	base := dialer.DialContext
+	if c.opts.Doh != "" {
+		base = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return dialer.DialContext(ctx, network, addr)
+			}
+			if ip := net.ParseIP(host); ip != nil {
+				return dialer.DialContext(ctx, network, addr)
+			}
+			ips, err := c.resolve(ctx, host)
+			if err != nil || len(ips) == 0 {
+				return dialer.DialContext(ctx, network, addr)
+			}
+			var lastErr error
+			for _, ip := range ips {
+				conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+				if err == nil {
+					return conn, nil
+				}
+				lastErr = err
+			}
+			return nil, lastErr
+		}
 	}
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(addr)
-		if err != nil {
-			return dialer.DialContext(ctx, network, addr)
-		}
-		if ip := net.ParseIP(host); ip != nil {
-			return dialer.DialContext(ctx, network, addr)
-		}
-		ips, err := c.resolve(ctx, host)
-		if err != nil || len(ips) == 0 {
-			return dialer.DialContext(ctx, network, addr)
-		}
-		var lastErr error
-		for _, ip := range ips {
-			conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if !c.opts.AllowPrivate {
+			host, _, err := net.SplitHostPort(addr)
 			if err == nil {
-				return conn, nil
+				if ip := net.ParseIP(host); ip != nil && blockedIP(ip) {
+					return nil, fmt.Errorf("blocked address %s", host)
+				}
 			}
-			lastErr = err
 		}
-		return nil, lastErr
+		return base(ctx, network, addr)
 	}
 }
 
