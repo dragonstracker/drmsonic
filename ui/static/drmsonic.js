@@ -1,16 +1,50 @@
+function streamDomId(providerId, streamId) {
+	return '_' + providerId + '~' + streamId
+}
+
 function getStreamId(id) {
-	return /_.*_(.*)/.exec(id)[1]
+	var i = id.indexOf('~')
+	if (i >= 0) {
+		return id.slice(i + 1)
+	}
+	var m = /_([^_]+)_(.+)$/.exec(id)
+	return m ? m[2] : id
 }
 
 function getProviderId(id) {
-	return /_(.*)_.*/.exec(id)[1]
+	var i = id.indexOf('~')
+	if (i >= 0) {
+		if (id.charAt(0) === '_') {
+			return id.slice(1, i)
+		}
+		var start = id.indexOf('_')
+		if (start >= 0 && start < i) {
+			return id.slice(start + 1, i)
+		}
+		return id.slice(0, i)
+	}
+	var m = /_([^_]+)_(.+)$/.exec(id)
+	return m ? m[1] : id
 }
 
 function getId(id) {
 	if (id.includes('recstreamname')) {
 		return /recstreamname(.*)/.exec(id)[1]
-	} 	
+	}
+	var m = /(_[^~]+~.+)$/.exec(id)
+	if (m) {
+		return m[1]
+	}
 	return /(_.*_.*)/.exec(id)[1]
+}
+
+function parseNameDomId(html) {
+	var m = /name(_[^~]+~[^"]*)/.exec(html)
+	if (m) {
+		return m[1]
+	}
+	m = /name(_[^_]*_[^"]*)/.exec(html)
+	return m ? m[1] : null
 }
 
 function initPlayer() {
@@ -1017,16 +1051,17 @@ async function getEvents(epgtable) {
 			color = "white"
 		}
 
-		evid = '<a id="name_' + providerId + '_' + entry.EventId + '" href="' + entry.StreamingUrl + '" onclick="return setPlayer(event, id);">' + entry.EventId + '</a>'
+		var eventDom = streamDomId(providerId, entry.EventId)
+		evid = '<a id="name' + eventDom + '" href="' + entry.StreamingUrl + '" onclick="return setPlayer(event, id);">' + entry.EventId + '</a>'
 		if (entry.OnAirId != '') {
-			evid += '<br><a id="name_' + providerId + '_' + entry.OnAirId + '" href="' + entry.StreamingOnAirUrl + '" onclick="return setPlayer(event, id);">' + entry.OnAirId + '</a>'
+			evid += '<br><a id="name' + streamDomId(providerId, entry.OnAirId) + '" href="' + entry.StreamingOnAirUrl + '" onclick="return setPlayer(event, id);">' + entry.OnAirId + '</a>'
 		}
 		conf = '<a href="config/' + providerId + '?search=' + entry.Title + '"><img style="width: 20px; height: auto;" src="static/gear.svg" /></a>'
 
 		if (entry.Running) {
-			play = '<button onclick="return startStopClick(event, id)"; style="border-color: transparent;" type="button" class="btn" id="startStop_' + providerId + '_' + entry.EventId + '"><img id="playstop_' + providerId + '_' + entry.EventId + '" style="width: 20px; height: auto;" src="static/stop.svg"/></button>'
+			play = '<button onclick="return startStopClick(event, id)"; style="border-color: transparent;" type="button" class="btn" id="startStop' + eventDom + '"><img id="playstop' + eventDom + '" style="width: 20px; height: auto;" src="static/stop.svg"/></button>'
 		} else {
-			play = '<button onclick="return startStopClick(event, id)"; style="border-color: transparent;" type="button" class="btn" id="startStop_' + providerId + '_' + entry.EventId + '"><img id="playstop_' + providerId + '_' + entry.EventId + '" style="width: 20px; height: auto;" src="static/play.svg"/></button>'
+			play = '<button onclick="return startStopClick(event, id)"; style="border-color: transparent;" type="button" class="btn" id="startStop' + eventDom + '"><img id="playstop' + eventDom + '" style="width: 20px; height: auto;" src="static/play.svg"/></button>'
 		}
 
 		if (entry.Status.includes("Error:") || entry.Status.includes('Key(s) missing')) {
@@ -1041,7 +1076,7 @@ async function getEvents(epgtable) {
 		}
 		statusColor = entry.StatusColor;
 
-		epgtable.row.add(['<a id="title_' + providerId + '_' + entry.EventId + '" style="color: ' + color + '";>' +  entry.Title + '</a>', '<pre id="status_' + providerId + '_' + entry.EventId + '" onclick="return showErrorLogWindow(event, id)"; style="color: ' + statusColor + ';">' + status + '</pre><div hidden id="statusfull_' + providerId + '_' + entry.EventId + '">' + entry.Status + '</div>', entry.StartFmt, entry.EndFmt, evid, play+conf]).draw()
+		epgtable.row.add(['<a id="title' + eventDom + '" style="color: ' + color + '";>' +  entry.Title + '</a>', '<pre id="status' + eventDom + '" onclick="return showErrorLogWindow(event, id)"; style="color: ' + statusColor + ';">' + status + '</pre><div hidden id="statusfull' + eventDom + '">' + entry.Status + '</div>', entry.StartFmt, entry.EndFmt, evid, play+conf]).draw()
 	})
 
 	$(epgtable.column(2).header()).text('Start Date (' + data.Timezone + ')');
@@ -1085,17 +1120,18 @@ async function updateEvents(epgtable) {
 	providerId = document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value
 
 	data.Entries.forEach(function(entry){
-		if (document.getElementById('name_' + providerId + '_' + entry.EventId) && isInViewport(document.getElementById('name_' + providerId + '_' + entry.EventId))) {
+		var eventDom = streamDomId(providerId, entry.EventId)
+		if (document.getElementById('name' + eventDom) && isInViewport(document.getElementById('name' + eventDom))) {
 			if (entry.Running) {
-				document.getElementById('playstop_' + providerId + '_' + entry.EventId).src = "static/stop.svg"
+				document.getElementById('playstop' + eventDom).src = "static/stop.svg"
 			} else {
-				document.getElementById('playstop_' + providerId + '_' + entry.EventId).src = "static/play.svg"
+				document.getElementById('playstop' + eventDom).src = "static/play.svg"
 			}
 
 			if (entry.OnAirId != '') {
-				document.getElementById('title_' + providerId + '_' + entry.EventId).style.color = "green"
+				document.getElementById('title' + eventDom).style.color = "green"
 			} else {
-				document.getElementById('title_' + providerId + '_' + entry.EventId).style.color = "white"
+				document.getElementById('title' + eventDom).style.color = "white"
 			}
 
 
@@ -1109,8 +1145,8 @@ async function updateEvents(epgtable) {
 			} else {
 				status = entry.Status;
 			}
-			document.getElementById('status_' + providerId + '_' + entry.EventId).innerText = status;
-			document.getElementById('status_' + providerId + '_' + entry.EventId).style.color = entry.StatusColor;
+			document.getElementById('status' + eventDom).innerText = status;
+			document.getElementById('status' + eventDom).style.color = entry.StatusColor;
 		}
 	})
 
@@ -1154,8 +1190,9 @@ async function getReplays(replaystable) {
 			color = "white"
 		}
 
-		replayid = '<a id="replay_' + document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value + '_' + replay.EventId + '" href="' + replay.StreamingUrl + '" onclick="return setPlayer(event, id);">' + replay.EventId + '</a>';
-		del = '<input type="button" class="btn btn-primary" id="deletereplay_' + document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value + '_' + replay.EventId + '" value="DELETE" onclick="return deleteReplayClick(event, id);"/>'
+		var replayDom = streamDomId(document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value, replay.EventId)
+		replayid = '<a id="replay' + replayDom + '" href="' + replay.StreamingUrl + '" onclick="return setPlayer(event, id);">' + replay.EventId + '</a>';
+		del = '<input type="button" class="btn btn-primary" id="deletereplay' + replayDom + '" value="DELETE" onclick="return deleteReplayClick(event, id);"/>'
 
 		replaystable.row.add(['<a style="color: ' + color + '";>' + replay.EventName + '</a>', replay.StartFmt, replay.EndFmt, replayid, del]).draw()
 	})
@@ -1625,7 +1662,7 @@ async function flushKeysClick(e) {
 
 async function populateStream(item) {
 
-	id = '_' + document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value + '_' + item.Id
+	id = streamDomId(document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value, item.Id)
 
 	// Store value
 	streamsPrevParams.set(id, item.Stream)
@@ -1935,7 +1972,10 @@ async function checkallChange(e) {
 	}
 
 	rowArray.forEach( function (row) {
-		id = /name(_[^_]*_[^"]*)/.exec(row[2])[1]
+		id = parseNameDomId(row[2])
+		if (!id) {
+			return
+		}
 		var el = document.getElementById('checked' + id)
 		if (el) {
 			el.checked = document.getElementById('checkall').checked;
@@ -2052,7 +2092,7 @@ async function updateStreamsBody(table, init, providerId) {
 						PChangeCounter[stream.Id] = -1;
 					}
 
-					var id = '_' + provider.Id + '_' + stream.Id
+					var id = streamDomId(provider.Id, stream.Id)
 					if (init || !document.getElementById('startStop' + id) || stream.PChangeCounter > PChangeCounter[stream.Id] ) {
 						idsList += stream.Id + ","
 					}
@@ -2180,8 +2220,8 @@ async function updateStreamsBody(table, init, providerId) {
 						<br>
 						<div id="headersDiv` + id + `">
 							<br>
-							<textarea class="form-control" disabled" placeholder="manifest headers" id="headersmanifest` + id + `" cols="20" rows="2"></textarea>
-							<textarea class="form-control" disabled" placeholder="media headers" id="headersmedia` + id + `" cols="20" rows="2"></textarea>
+							<textarea class="form-control" disabled placeholder="manifest headers" id="headersmanifest` + id + `" cols="20" rows="2"></textarea>
+							<textarea class="form-control" disabled placeholder="media headers" id="headersmedia` + id + `" cols="20" rows="2"></textarea>
 							<br>
 						</div>
 						<div class="input-group mb-4">
@@ -2392,7 +2432,7 @@ async function updateStreamsBody(table, init, providerId) {
 		data.Providers.forEach(function(provider){
 			if (provider.Streams) {
 				provider.Streams.forEach(function(stream){
-					let n = '_' + provider.Id + '_' + stream.Id;
+					let n = streamDomId(provider.Id, stream.Id);
 
 					if (document.getElementById('name' + n)) {
 						if (!document.getElementById('startStop' + n)) {
@@ -2690,7 +2730,7 @@ async function updateStatus() {
 	data.Providers.forEach(function(provider){
 		if (provider.Streams) {
 			provider.Streams.forEach(function(stream){
-				let n = '_' + provider.Id + '_' + stream.Id;
+				let n = streamDomId(provider.Id, stream.Id);
 				if (document.getElementById('name' + n)) {
 					document.getElementById('name' + n).href = stream.StreamingUrl;
 
@@ -3193,7 +3233,10 @@ function getSelectedIds() {
 
 	var idsList = ""
 	rowArray.forEach( function (row) {
-		id = /name(_[^_]*_[^"]*)/.exec(row[2])[1]
+		id = parseNameDomId(row[2])
+		if (!id) {
+			return
+		}
 		var el = document.getElementById('checked' + id)
 
 		if (el && el.checked) {
@@ -3209,9 +3252,9 @@ function getSelectedIds() {
 function streamRows(table) {
 	var rows = {};
 	table.rows({ page: 'current' }).every( function (rowIdx) {
-		var m = /name(_[^_]*_[^"]*)/.exec(this.data()[2]);
-		if (m) {
-			rows[getStreamId(m[1])] = { index: rowIdx, id: m[1] };
+		var id = parseNameDomId(this.data()[2]);
+		if (id) {
+			rows[getStreamId(id)] = { index: rowIdx, id: id };
 		}
 	});
 	return rows
@@ -3225,11 +3268,10 @@ function getVisibleIds() {
 
 	var idsList = ""
 	rowArray.forEach( function (row) {
-		var m = /name(_[^_]*_[^"]*)/.exec(row[2])
-		if (!m) {
+		var id = parseNameDomId(row[2])
+		if (!id) {
 			return
 		}
-		id = m[1]
 		var el = document.getElementById('name' + id)
 		if (!document.getElementById('startStop' + id) || (el && isInViewport(el))) {
 			idsList += getStreamId(id) + ","
@@ -3249,7 +3291,10 @@ function getPageIds(selectedOnly) {
 
 	var idsList = ""
 	rowArray.forEach( function (row) {
-		id = /name(_[^_]*_[^"]*)/.exec(row[2])[1]
+		id = parseNameDomId(row[2])
+		if (!id) {
+			return
+		}
 		idsList += getStreamId(id) + ","
 	});
 

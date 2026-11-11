@@ -25,10 +25,10 @@ func statusPage(t *testing.T, target string, providers ...*config.Provider) stri
 func TestStatusPageShowsOnlySelectedProvider(t *testing.T) {
 	body := statusPage(t, "/status/example", sampleProvider("channels"), sampleProvider("example"))
 
-	if strings.Contains(body, "name_channels_") {
+	if strings.Contains(body, "name_channels~") {
 		t.Fatal("other provider rows leaked into the page")
 	}
-	if !strings.Contains(body, "name_example_channel1") {
+	if !strings.Contains(body, "name_example~channel1") {
 		t.Fatal("selected provider rows are missing")
 	}
 	if !strings.Contains(body, "1 stream(s)") {
@@ -39,7 +39,7 @@ func TestStatusPageShowsOnlySelectedProvider(t *testing.T) {
 func TestStatusPageAllRunningKeepsEveryProvider(t *testing.T) {
 	body := statusPage(t, "/status/example?filter=allrunning", sampleProvider("channels"), sampleProvider("example"))
 
-	if !strings.Contains(body, "name_channels_channel1") || !strings.Contains(body, "name_example_channel1") {
+	if !strings.Contains(body, "name_channels~channel1") || !strings.Contains(body, "name_example~channel1") {
 		t.Fatal("all running should span every provider")
 	}
 	if !strings.Contains(body, "2 stream(s)") {
