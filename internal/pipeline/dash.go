@@ -479,6 +479,7 @@ func chooseAudioTrack(tracks []manifest.Track, want string) *manifest.Track {
 	if len(tracks) == 0 {
 		return nil
 	}
+	want = strings.TrimSpace(want)
 	if want == "none" {
 		return nil
 	}
@@ -488,9 +489,38 @@ func chooseAudioTrack(tracks []manifest.Track, want string) *manifest.Track {
 				return &tracks[i]
 			}
 		}
+		pref := want
+		switch {
+		case strings.HasPrefix(want, "lang="):
+			pref = strings.TrimPrefix(want, "lang=")
+		case strings.HasPrefix(want, "desc:"):
+			pref = strings.TrimPrefix(want, "desc:")
+		}
+		for _, raw := range strings.Split(pref, ",") {
+			p := strings.ToLower(strings.TrimSpace(raw))
+			if p == "" {
+				continue
+			}
+			aliases := []string{p}
+			if p == "en" {
+				aliases = append(aliases, "eng")
+			} else if p == "eng" {
+				aliases = append(aliases, "en")
+			}
+			for i := range tracks {
+				lang := strings.ToLower(tracks[i].Lang)
+				id := strings.ToLower(tracks[i].ID)
+				for _, a := range aliases {
+					if lang == a || strings.Contains(id, a) {
+						return &tracks[i]
+					}
+				}
+			}
+		}
 	}
 	for i := range tracks {
-		if tracks[i].Lang == "eng" {
+		lang := strings.ToLower(tracks[i].Lang)
+		if lang == "eng" || lang == "en" {
 			return &tracks[i]
 		}
 	}

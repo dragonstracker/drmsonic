@@ -71,19 +71,19 @@
 							<TD style='text-align:center; vertical-align:middle; font-weight: bold; border-bottom: 0;'>
 								<a id="name_{{$p.Id}}~{{$s.Id}}" type="button" class="btn btn-outline-primary"><font size="+4">{{$s.Name}}</font></a>
 								<div style="line-height:20%;"><br></div>
-								<img id="qualitylogo_{{$p.Id}}_{{$s.Id}}" width="20">
+								<img id="qualitylogo_{{$p.Id}}~{{$s.Id}}" width="20">
 								{{ if $s.IsEvent }}&nbsp;&nbsp;&nbsp;<img data-bs-toggle="tooltip" data-bs-title="Event" style="width: 20px; height: auto;" src="static/event.svg"/>{{ end }}
 								{{ if $.IsAdmin }}
-								<button style="border-color: transparent;" type="button" class="btn" id="startStop_{{$p.Id}}_{{$s.Id}}"></button>
+								<button style="border-color: transparent;" type="button" class="btn" id="startStop_{{$p.Id}}~{{$s.Id}}"></button>
 								<a href="config/{{$p.Id}}?search={{$s.Name}}">
 									<img style="width: 20px; height: auto;" src="static/gear.svg"/>
 								</a>
 								{{ end }}
-								<div hidden id="statusfull_{{$p.Id}}_{{$s.Id}}"></div>
+								<div hidden id="statusfull_{{$p.Id}}~{{$s.Id}}"></div>
 								<div style="line-height:20%;"><br></div>
-								<pre style="white-space: pre-wrap;" id="status_{{$p.Id}}_{{$s.Id}}"></pre>
+								<pre style="white-space: pre-wrap;" id="status_{{$p.Id}}~{{$s.Id}}"></pre>
 								<div style="line-height:0%;"><br></div>
-								<pre style="white-space: pre-wrap;" id="streamerrors_{{$p.Id}}_{{$s.Id}}"></pre>
+								<pre style="white-space: pre-wrap;" id="streamerrors_{{$p.Id}}~{{$s.Id}}"></pre>
 								<div style="line-height:40%;"><br></div>
 							</TD>
 					{{ end }}

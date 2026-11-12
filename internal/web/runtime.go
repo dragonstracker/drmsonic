@@ -104,13 +104,13 @@ func (s *Server) startChannel(prov *config.Provider, st *config.Stream) {
 
 func renditionIDs(st *config.Stream) []string {
 	sel := strings.TrimSpace(st.Video)
-	if sel == "" || sel == "best" {
+	if sel == "" || sel == "best" || sel == "max" {
 		return nil
 	}
 	if sel == "all" {
 		out := make([]string, 0, len(st.VideoList))
 		for _, t := range st.VideoList {
-			if t.Id == "" || t.Id == "best" || t.Id == "all" {
+			if t.Id == "" || t.Id == "best" || t.Id == "max" || t.Id == "all" {
 				continue
 			}
 			out = append(out, t.Id)
@@ -122,7 +122,7 @@ func renditionIDs(st *config.Stream) []string {
 	seen := map[string]bool{}
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
-		if part == "" || part == "best" || part == "all" || part == "worst" || part == "none" {
+		if part == "" || part == "best" || part == "max" || part == "all" || part == "worst" || part == "none" {
 			continue
 		}
 		if strings.ContainsAny(part, "<>=") || strings.HasPrefix(part, "codec=") || strings.HasPrefix(part, "bw") || strings.HasPrefix(part, "h") || strings.HasPrefix(part, "top:") {

@@ -26,7 +26,7 @@ func Select(video, audio, text []manifest.Track, videoSel, audioSel, textSel str
 
 func pick(tracks []manifest.Track, sel string, isVideo bool, notes []string) ([]manifest.Track, []string) {
 	sel = strings.TrimSpace(sel)
-	if sel == "" || sel == "best" {
+	if sel == "" || sel == "best" || sel == "max" {
 		return topN(tracks, 1), notes
 	}
 	if sel == "none" {
@@ -55,7 +55,7 @@ func pick(tracks []manifest.Track, sel string, isVideo bool, notes []string) ([]
 	var ids []string
 	for _, tok := range tokens {
 		tok = strings.TrimSpace(tok)
-		if tok == "" || tok == "best" || tok == "all" || tok == "worst" || tok == "none" {
+		if tok == "" || tok == "best" || tok == "max" || tok == "all" || tok == "worst" || tok == "none" {
 			continue
 		}
 		if _, ok := filterToken(tracks, tok, isVideo); ok {
@@ -131,6 +131,11 @@ func filterToken(tracks []manifest.Track, tok string, isVideo bool) ([]manifest.
 		}
 		langs := strings.Split(strings.TrimPrefix(tok, "lang="), ",")
 		return filterLang(tracks, langs), true
+	case strings.HasPrefix(tok, "desc:"):
+		if isVideo {
+			return nil, true
+		}
+		return filterDesc(tracks, strings.TrimPrefix(tok, "desc:")), true
 	case tok == "default":
 		if isVideo {
 			return nil, true
@@ -192,12 +197,46 @@ func filterCodec(tracks []manifest.Track, pref string) []manifest.Track {
 func filterLang(tracks []manifest.Track, langs []string) []manifest.Track {
 	want := map[string]bool{}
 	for _, l := range langs {
-		want[strings.ToLower(strings.TrimSpace(l))] = true
+		l = strings.ToLower(strings.TrimSpace(l))
+		if l == "" {
+			continue
+		}
+		want[l] = true
+		if l == "en" {
+			want["eng"] = true
+		} else if l == "eng" {
+			want["en"] = true
+		}
 	}
 	out := make([]manifest.Track, 0, len(tracks))
 	for _, t := range tracks {
 		if want[strings.ToLower(t.Lang)] {
 			out = append(out, t)
+		}
+	}
+	return sortByBandwidth(out)
+}
+
+func filterDesc(tracks []manifest.Track, needle string) []manifest.Track {
+	needle = strings.ToLower(strings.TrimSpace(needle))
+	if needle == "" {
+		return sortByBandwidth(tracks)
+	}
+	langs := []string{needle}
+	if needle == "en" {
+		langs = append(langs, "eng")
+	} else if needle == "eng" {
+		langs = append(langs, "en")
+	}
+	out := make([]manifest.Track, 0, len(tracks))
+	for _, t := range tracks {
+		lang := strings.ToLower(t.Lang)
+		id := strings.ToLower(t.ID)
+		for _, a := range langs {
+			if lang == a || strings.Contains(id, a) {
+				out = append(out, t)
+				break
+			}
 		}
 	}
 	return sortByBandwidth(out)

@@ -7,6 +7,14 @@ Versions follow the release tags on GitHub.
 
 ## [Unreleased] — branch `devloper`
 
+### Added
+- Video selector `max` (highest bandwidth) and audio selectors `lang=en` / `desc:en`.
+
+### Fixed
+- Config Start no longer wipes unsaved Manifest/Keys (persist form fields before start).
+- Streams page status/start/stop ids mismatched (`_` vs `~`); running state updates again.
+- Events refresh no longer downgrades a stream that already had Manifest/Keys when the API returns the same id blank.
+
 ## [1.1.4] — 2026-11-11
 
 ### Added

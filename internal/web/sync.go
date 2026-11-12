@@ -175,6 +175,39 @@ func filterStreams(list []config.Stream, events bool) []config.Stream {
 	return out
 }
 
+func preserveStreamMedia(prev, next config.Stream) config.Stream {
+	if strings.TrimSpace(next.Manifest) == "" && strings.TrimSpace(prev.Manifest) != "" {
+		next.Manifest = prev.Manifest
+	}
+	if strings.TrimSpace(next.ManifestScript) == "" && strings.TrimSpace(prev.ManifestScript) != "" {
+		next.ManifestScript = prev.ManifestScript
+	}
+	if strings.TrimSpace(next.Cdm) == "" && strings.TrimSpace(prev.Cdm) != "" {
+		next.Cdm = prev.Cdm
+	}
+	if len(next.Keys) == 0 && len(prev.Keys) > 0 {
+		next.Keys = append([]string{}, prev.Keys...)
+	}
+	if !next.UseCdm && prev.UseCdm && (strings.TrimSpace(next.Manifest) != "" || len(next.Keys) > 0 || strings.TrimSpace(next.Cdm) != "") {
+		next.UseCdm = true
+	}
+	if !next.SessionManifest && prev.SessionManifest && (strings.TrimSpace(next.Manifest) != "" || strings.TrimSpace(next.ManifestScript) != "") {
+		next.SessionManifest = true
+	}
+	if prev.Autostart && !next.Autostart {
+		if strings.TrimSpace(next.Manifest) != "" && (len(next.Keys) > 0 || next.UseCdm) {
+			next.Autostart = true
+		}
+	}
+	if strings.TrimSpace(next.Video) == "" && strings.TrimSpace(prev.Video) != "" {
+		next.Video = prev.Video
+	}
+	if strings.TrimSpace(next.Audio) == "" && strings.TrimSpace(prev.Audio) != "" {
+		next.Audio = prev.Audio
+	}
+	return next
+}
+
 func mergeScriptStreams(existing []config.Stream, incoming []config.Stream, events, autoremove bool) []config.Stream {
 	kept := make([]config.Stream, 0, len(existing))
 	for _, st := range existing {
@@ -207,6 +240,7 @@ func mergeScriptStreams(existing []config.Stream, incoming []config.Stream, even
 			if n.Id == id {
 				n.IsEvent = events
 				n.IgnoreUpdate = st.IgnoreUpdate
+				n = preserveStreamMedia(st, n)
 				merged = append(merged, n)
 				seen[id] = true
 				found = true
@@ -246,7 +280,8 @@ func (s *Server) acChannelsUpdateRequest(w http.ResponseWriter, req actionReques
 	for i := range rows {
 		rows[i].IsEvent = false
 	}
-	summary := syncSummary("channels", filterStreams(p.Streams, false), rows)
+	preview := mergeScriptStreams(p.Streams, rows, false, p.ChannelsAutoremove)
+	summary := syncSummary("channels", filterStreams(p.Streams, false), filterStreams(preview, false))
 	s.setPending(p.Id, &pendingUpdate{kind: "channels", streams: rows, summary: summary})
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte(summary))
@@ -289,7 +324,8 @@ func (s *Server) acEventsRefreshRequest(w http.ResponseWriter, req actionRequest
 	for i := range rows {
 		rows[i].IsEvent = true
 	}
-	summary := syncSummary("events", filterStreams(p.Streams, true), rows)
+	preview := mergeScriptStreams(p.Streams, rows, true, p.EventsAutoremove)
+	summary := syncSummary("events", filterStreams(p.Streams, true), filterStreams(preview, true))
 	s.setPending(p.Id, &pendingUpdate{kind: "events", streams: rows, summary: summary})
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte(summary))

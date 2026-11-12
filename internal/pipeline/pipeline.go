@@ -210,7 +210,7 @@ func chooseVideo(tracks []manifest.Track, want string) *manifest.Track {
 		return nil
 	}
 	want = strings.TrimSpace(want)
-	if want != "" && want != "all" && want != "best" {
+	if want != "" && want != "all" && want != "best" && want != "max" {
 		for i := range tracks {
 			if tracks[i].ID == want {
 				return &tracks[i]

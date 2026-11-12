@@ -211,23 +211,15 @@ async function playerSubtitlesSelectOnchange(e) {
 	hls.subtitleTrack  = document.getElementById('playerSubtitlesSelect').selectedIndex
 }
 
-async function updateStream(e) {
-	e.preventDefault();
-
-	n = getId(this.id)
-
-	if (this.id.includes("speedup") && document.getElementById(this.id).checked && !document.getElementById('ondemand' + n).checked) {
-		var result = confirm("Are you sure you want to set SpeedUp?\n\nSetting this option is only recommened to speed-up playback start when the OnDemand option is selected.");
-		if (result != true) {
-			document.getElementById(this.id).checked = false;
-			return
-		}
+async function persistStreamFields(n) {
+	if (!document.getElementById('manifestUrl' + n) || !document.getElementById('keys' + n)) {
+		return true;
 	}
 
-	name = document.getElementById('name' + n).innerText
+	var name = document.getElementById('name' + n).innerText
 
-	vStreamId = $('#vStreamId' + n).val()
-	aStreamId = ""
+	var vStreamId = $('#vStreamId' + n).val()
+	var aStreamId = ""
 	$('#aStreamId' + n).val().forEach(function(i) {
 		if (i == "all") {
 			aStreamId = "all"
@@ -240,7 +232,7 @@ async function updateStream(e) {
 			aStreamId += i
 		}
 	});
-	sStreamId = ""
+	var sStreamId = ""
 	$('#sStreamId' + n).val().forEach(function(i) {
 		if (i == "all") {
 			sStreamId = "all"
@@ -253,12 +245,13 @@ async function updateStream(e) {
 		}
 	});
 
-	prevParams = streamsPrevParams.get(n);
+	var prevParams = streamsPrevParams.get(n);
 	if (!prevParams) {
 		showStatusWindow('internal error');
+		return false;
 	}
 
-	prevKeys = ""
+	var prevKeys = ""
 	if (prevParams.Keys) {
 		for (let i = 0; i <  prevParams.Keys.length; i++) {
 			prevKeys += prevParams.Keys[i]
@@ -268,8 +261,8 @@ async function updateStream(e) {
 		}
 	}
 
-	startTime = document.getElementById('rangeStartTime' + n).value
-	endTime = document.getElementById('rangeEndTime' + n).value
+	var startTime = document.getElementById('rangeStartTime' + n).value
+	var endTime = document.getElementById('rangeEndTime' + n).value
 	if (startTime == '') {
 		startTime = "00:00"
 	}
@@ -277,6 +270,8 @@ async function updateStream(e) {
 		endTime = "00:00"
 	}
 
+	var start = ""
+	var end = ""
 	try {
 		start = new Date(document.getElementById('rangeStartDate' + n).value + 'T' + startTime + ":00").toISOString()
 	} catch (error) {
@@ -288,13 +283,13 @@ async function updateStream(e) {
 		end = ""
 	}
 
-	data = {
+	var data = {
 		Action : 'updatestream',
-		ProviderId : getProviderId(this.id),
+		ProviderId : getProviderId(n),
 		Streams : [
 			{
 				Name : name,
-				Id : getStreamId(this.id),
+				Id : getStreamId(n),
 				ManifestUrl : document.getElementById('manifestUrl' + n).value,
 				ManifestScript : document.getElementById('manifestscript' + n).value,
 				Mode : document.getElementById('mode' + n).options[document.getElementById('mode' + n).selectedIndex].value,
@@ -335,7 +330,7 @@ async function updateStream(e) {
 		PrevStreams : [
 			{
 				Name : name,
-				Id : getStreamId(this.id),
+				Id : getStreamId(n),
 				ManifestUrl: prevParams.Manifest,
 				ManifestScript: prevParams.ManifestScript,
 				Mode: prevParams.Mode,
@@ -372,67 +367,89 @@ async function updateStream(e) {
 				RangeStartTime: prevParams.RangeStartTime,
 				RangeEndTime: prevParams.RangeEndTime
 			}
-		]	
+		]
 	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
 		body: JSON.stringify(data),
 	})
 
-	text = await response.text();
+	var text = await response.text();
 	if (!response.ok) {
 		showStatusWindow(text);
-		return
-	} else {
-		// Update prevparams
-		prevParams.Manifest = data.Streams[0].ManifestUrl
-		prevParams.ManifestScript = data.Streams[0].ManifestScript
-		prevParams.Mode = data.Streams[0].Mode
-		prevParams.RunningMode = data.Streams[0].RunningMode
-		prevParams.OutputMode = data.Streams[0].OutputMode
-		prevParams.Video = data.Streams[0].VStreamId
-		prevParams.Audio = data.Streams[0].Audio
-		prevParams.Subtitles = data.Streams[0].Subtitles
-		prevParams.CdmType = data.Streams[0].CdmType
-		prevParams.CdmMode = data.Streams[0].CdmMode
-		prevParams.Cdm = data.Streams[0].Cdm
-		prevParams.PRClientVersion = data.Streams[0].PRClientVersion
-		prevParams.PRCustomData = data.Streams[0].PRCustomData
-		prevParams.Keys = []
-		if  (data.Streams[0].Keys) {
-			data.Streams[0].Keys.split(",").forEach(function(id) {
-				prevParams.Keys.push(id)
-			});
-		}
-		prevParams.OnDemand = data.Streams[0].OnDemand 
-		prevParams.Autostart = data.Streams[0].Autostart 
-		prevParams.PipeOutputParams = data.Streams[0].PipeOutputParams
-		prevParams.ProtoOutputParams = data.Streams[0].ProtoOutputParams
-		prevParams.SessionManifest = data.Streams[0].SessionManifest 
-		prevParams.SpeedUp = data.Streams[0].SpeedUp 
-		prevParams.UseCdm = data.Streams[0].UseCdm 
-		prevParams.NetworkOverride = data.Streams[0].NetworkOverride 
-		prevParams.ModeOverride = data.Streams[0].ModeOverride 
-		prevParams.RecordEvent = data.Streams[0].RecordEvent 
-		prevParams.IgnoreUpdate = data.Streams[0].IgnoreUpdate 
-		prevParams.FixIvSize = data.Streams[0].FixIvSize 
-		prevParams.Bind = data.Streams[0].Bind
-		prevParams.Proxy = data.Streams[0].Proxy
-		prevParams.Doh = data.Streams[0].Doh
-		prevParams.NetworkScope = data.Streams[0].NetworkScope
-		prevParams.UserAgent = data.Streams[0].UserAgent
-		prevParams.ManifestScriptParam = data.Streams[0].ManifestScriptParam
-		prevParams.CdmParam = data.Streams[0].CdmParam
-
-		streamsPrevParams.set(n, prevParams)
+		return false;
 	}
 
-	document.getElementById('saveall').removeAttribute("disabled");
-	document.getElementById('saveprovider').removeAttribute("disabled");
+	prevParams.Manifest = data.Streams[0].ManifestUrl
+	prevParams.ManifestScript = data.Streams[0].ManifestScript
+	prevParams.Mode = data.Streams[0].Mode
+	prevParams.RunningMode = data.Streams[0].RunningMode
+	prevParams.OutputMode = data.Streams[0].OutputMode
+	prevParams.Video = data.Streams[0].VStreamId
+	prevParams.Audio = data.Streams[0].AStreamId
+	prevParams.Subtitles = data.Streams[0].SStreamId
+	prevParams.CdmType = data.Streams[0].CdmType
+	prevParams.CdmMode = data.Streams[0].CdmMode
+	prevParams.Cdm = data.Streams[0].Cdm
+	prevParams.PRClientVersion = data.Streams[0].PRClientVersion
+	prevParams.PRCustomData = data.Streams[0].PRCustomData
+	prevParams.Keys = []
+	if (data.Streams[0].Keys) {
+		String(data.Streams[0].Keys).split(/\r?\n|,/).forEach(function(id) {
+			id = id.trim()
+			if (id) {
+				prevParams.Keys.push(id)
+			}
+		});
+	}
+	prevParams.OnDemand = data.Streams[0].OnDemand
+	prevParams.Autostart = data.Streams[0].Autostart
+	prevParams.PipeOutputParams = data.Streams[0].PipeOutputParams
+	prevParams.ProtoOutputParams = data.Streams[0].ProtoOutputParams
+	prevParams.SessionManifest = data.Streams[0].SessionManifest
+	prevParams.SpeedUp = data.Streams[0].SpeedUp
+	prevParams.UseCdm = data.Streams[0].UseCdm
+	prevParams.NetworkOverride = data.Streams[0].NetworkOverride
+	prevParams.ModeOverride = data.Streams[0].ModeOverride
+	prevParams.RecordEvent = data.Streams[0].RecordEvent
+	prevParams.IgnoreUpdate = data.Streams[0].IgnoreUpdate
+	prevParams.FixIvSize = data.Streams[0].FixIvSize
+	prevParams.Bind = data.Streams[0].Bind
+	prevParams.Proxy = data.Streams[0].Proxy
+	prevParams.Doh = data.Streams[0].Doh
+	prevParams.NetworkScope = data.Streams[0].NetworkScope
+	prevParams.UserAgent = data.Streams[0].UserAgent
+	prevParams.ManifestScriptParam = data.Streams[0].ManifestScriptParam
+	prevParams.CdmParam = data.Streams[0].CdmParam
+
+	streamsPrevParams.set(n, prevParams)
+	if (document.getElementById('saveall')) {
+		document.getElementById('saveall').removeAttribute("disabled");
+	}
+	if (document.getElementById('saveprovider')) {
+		document.getElementById('saveprovider').removeAttribute("disabled");
+	}
+	return true;
+}
+
+async function updateStream(e) {
+	e.preventDefault();
+
+	n = getId(this.id)
+
+	if (this.id.includes("speedup") && document.getElementById(this.id).checked && !document.getElementById('ondemand' + n).checked) {
+		var result = confirm("Are you sure you want to set SpeedUp?\n\nSetting this option is only recommened to speed-up playback start when the OnDemand option is selected.");
+		if (result != true) {
+			document.getElementById(this.id).checked = false;
+			return
+		}
+	}
+
+	await persistStreamFields(n);
 };
 
 // DELETE onCLick
@@ -650,6 +667,12 @@ async function startStopClick(e, id) {
 			action = 'stop'
 		}
 		providerId = getProviderId(id)
+		if (action == 'start') {
+			var saved = await persistStreamFields(n);
+			if (!saved) {
+				return
+			}
+		}
 	}
 
 	data = {
@@ -663,7 +686,7 @@ async function startStopClick(e, id) {
 	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
@@ -1766,15 +1789,18 @@ async function populateStream(item) {
 	var vStreamId = 'vStreamId' + id
 	$('#' + vStreamId).empty();
 
-	var videoSel = item.Stream.Video || "best";
-	sel = (videoSel == "best" || videoSel == "") ? "selected" : "";
-	$('#' + vStreamId).append('<option ' + sel + ' value="best">Best quality</option>');
+	var videoSel = item.Stream.Video || "max";
+	if (videoSel == "best") {
+		videoSel = "max";
+	}
+	sel = (videoSel == "max" || videoSel == "") ? "selected" : "";
+	$('#' + vStreamId).append('<option ' + sel + ' value="max">Max quality</option>');
 	sel = (videoSel == "all") ? "selected" : "";
 	$('#' + vStreamId).append('<option ' + sel + ' value="all">All qualities</option>');
 
 	if (item.Stream.VideoList != null) {
 		for (i=0; i<item.Stream.VideoList.length; i++) {
-			if (item.Stream.VideoList[i].Id == "best" || item.Stream.VideoList[i].Id == "all") {
+			if (item.Stream.VideoList[i].Id == "best" || item.Stream.VideoList[i].Id == "max" || item.Stream.VideoList[i].Id == "all") {
 				continue
 			}
 			sel = ""

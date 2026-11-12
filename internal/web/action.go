@@ -1299,7 +1299,7 @@ func applyDynamicField(st *config.Stream, field string, set bool, value any) {
 		st.CdmMode = config.CdmExternal
 	case "selectbestvideo":
 		if set {
-			st.Video = "best"
+			st.Video = "max"
 		} else {
 			st.Video = ""
 		}

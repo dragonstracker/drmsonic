@@ -71,15 +71,16 @@ func (s *Server) autoApplyEvents(p *config.Provider) (bool, error) {
 	for i := range rows {
 		rows[i].IsEvent = true
 	}
-	summary := syncSummary("events", filterStreams(p.Streams, true), rows)
-	if summary == "No change in events" {
-		return false, nil
-	}
 	fresh := s.store.Provider(p.Id)
 	if fresh == nil {
 		return false, nil
 	}
-	fresh.Streams = mergeScriptStreams(fresh.Streams, rows, true, fresh.EventsAutoremove)
+	before := filterStreams(fresh.Streams, true)
+	merged := mergeScriptStreams(fresh.Streams, rows, true, fresh.EventsAutoremove)
+	if syncSummary("events", before, filterStreams(merged, true)) == "No change in events" {
+		return false, nil
+	}
+	fresh.Streams = merged
 	if err := s.store.Put(fresh); err != nil {
 		return false, err
 	}
