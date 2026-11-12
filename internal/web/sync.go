@@ -247,9 +247,11 @@ func mergeScriptStreams(existing []config.Stream, incoming []config.Stream, even
 				break
 			}
 		}
-		if !found && !autoremove {
-			merged = append(merged, st)
-			seen[id] = true
+		if !found {
+			if !autoremove || keepManagedStream(st) {
+				merged = append(merged, st)
+				seen[id] = true
+			}
 		}
 	}
 	for _, n := range incoming {
@@ -260,6 +262,16 @@ func mergeScriptStreams(existing []config.Stream, incoming []config.Stream, even
 		merged = append(merged, n)
 	}
 	return append(kept, merged...)
+}
+
+func keepManagedStream(st config.Stream) bool {
+	if st.IgnoreUpdate {
+		return true
+	}
+	if strings.TrimSpace(st.Manifest) != "" || len(st.Keys) > 0 {
+		return true
+	}
+	return false
 }
 
 func (s *Server) acChannelsUpdateRequest(w http.ResponseWriter, req actionRequest) {

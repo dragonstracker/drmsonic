@@ -82,6 +82,21 @@ func TestMergeScriptStreamsKeepsMediaOnBlankIncoming(t *testing.T) {
 	}
 }
 
+func TestMergeScriptStreamsKeepsManagedWhenMissing(t *testing.T) {
+	existing := []config.Stream{{
+		Id:       "manual",
+		Name:     "Bangladesh vs India",
+		IsEvent:  true,
+		Manifest: "https://cdn.example/a.mpd",
+		Keys:     []string{"kid:key"},
+	}}
+	incoming := []config.Stream{}
+	got := mergeScriptStreams(existing, incoming, true, true)
+	if len(got) != 1 || got[0].Id != "manual" {
+		t.Fatalf("managed stream removed: %#v", got)
+	}
+}
+
 func TestMergeScriptStreamsAllowsMediaUpgrade(t *testing.T) {
 	existing := []config.Stream{{
 		Id:       "ev1",

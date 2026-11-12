@@ -211,16 +211,31 @@ async function playerSubtitlesSelectOnchange(e) {
 	hls.subtitleTrack  = document.getElementById('playerSubtitlesSelect').selectedIndex
 }
 
+function multiSelectValues(sel) {
+	var raw = $(sel).val()
+	if (raw == null || raw === undefined) {
+		return []
+	}
+	if (Array.isArray(raw)) {
+		return raw
+	}
+	return [raw]
+}
+
 async function persistStreamFields(n) {
 	if (!document.getElementById('manifestUrl' + n) || !document.getElementById('keys' + n)) {
 		return true;
 	}
 
-	var name = document.getElementById('name' + n).innerText
+	var nameEl = document.getElementById('name' + n)
+	if (!nameEl) {
+		return true;
+	}
+	var name = nameEl.innerText
 
-	var vStreamId = $('#vStreamId' + n).val()
+	var vStreamId = $('#vStreamId' + n).val() || ""
 	var aStreamId = ""
-	$('#aStreamId' + n).val().forEach(function(i) {
+	multiSelectValues('#aStreamId' + n).forEach(function(i) {
 		if (i == "all") {
 			aStreamId = "all"
 		} else if (i == "none") {
@@ -233,7 +248,7 @@ async function persistStreamFields(n) {
 		}
 	});
 	var sStreamId = ""
-	$('#sStreamId' + n).val().forEach(function(i) {
+	multiSelectValues('#sStreamId' + n).forEach(function(i) {
 		if (i == "all") {
 			sStreamId = "all"
 		}
@@ -247,8 +262,26 @@ async function persistStreamFields(n) {
 
 	var prevParams = streamsPrevParams.get(n);
 	if (!prevParams) {
-		showStatusWindow('internal error');
-		return false;
+		prevParams = {
+			Manifest: "",
+			ManifestScript: "",
+			Mode: "",
+			RunningMode: "",
+			OutputMode: "",
+			Video: "",
+			Audio: "",
+			Subtitles: "",
+			CdmType: "",
+			CdmMode: "",
+			Cdm: "",
+			Keys: [],
+			OnDemand: false,
+			Autostart: false,
+			SessionManifest: false,
+			SpeedUp: false,
+			UseCdm: false
+		};
+		streamsPrevParams.set(n, prevParams);
 	}
 
 	var prevKeys = ""
@@ -321,7 +354,7 @@ async function persistStreamFields(n) {
 				Bind: document.getElementById('bind' + n).value,
 				Proxy: document.getElementById('proxy' + n).value,
 				Doh: document.getElementById('doh' + n).value,
-				NetworkScope:  $('#networkscope' + n).val().toString(),
+				NetworkScope:  multiSelectValues('#networkscope' + n).toString(),
 				RangeStartTime: start,
 				RangeEndTime: end
 			}
@@ -668,9 +701,10 @@ async function startStopClick(e, id) {
 		}
 		providerId = getProviderId(id)
 		if (action == 'start') {
-			var saved = await persistStreamFields(n);
-			if (!saved) {
-				return
+			try {
+				await persistStreamFields(n);
+			} catch (err) {
+				console.error(err);
 			}
 		}
 	}

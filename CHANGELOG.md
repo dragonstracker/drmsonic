@@ -12,8 +12,10 @@ Versions follow the release tags on GitHub.
 
 ### Fixed
 - Config Start no longer wipes unsaved Manifest/Keys (persist form fields before start).
+- Start no longer aborts when select values/prevParams are missing; persist is best-effort.
 - Streams page status/start/stop ids mismatched (`_` vs `~`); running state updates again.
 - Events refresh no longer downgrades a stream that already had Manifest/Keys when the API returns the same id blank.
+- Events auto-remove no longer deletes streams that still have Manifest/Keys (manual paste / managed rows survive refresh).
 
 ## [1.1.4] — 2026-11-11
 
