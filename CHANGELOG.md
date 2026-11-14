@@ -18,6 +18,7 @@ Versions follow the release tags on GitHub.
 - Quality/track dropdown appears after MPD parse: track discovery no longer blocked by IgnoreUpdate, UI refreshes on track list change.
 - Action `refresh` (R) probes the manifest and fills VideoList/AudioList (o11 parity); Start/Restart probes before remux so Best video is not stuck on unknown when remux fails early.
 - Quality dropdown appears after probe on stopped streams: BumpStream now creates channel state so the panel reloads VideoList into the select.
+- Quality/audio/subtitle selects work with `~` DOM ids: jQuery `#id~x` was parsed as a sibling selector; use getElementById-backed jqEl.
 
 ## [1.1.4] — 2026-11-11
 

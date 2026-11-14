@@ -2,6 +2,17 @@ function streamDomId(providerId, streamId) {
 	return '_' + providerId + '~' + streamId
 }
 
+function jqEl(id) {
+	if (!id) {
+		return $()
+	}
+	if (id.charAt(0) === '#') {
+		id = id.slice(1)
+	}
+	var el = document.getElementById(id)
+	return el ? $(el) : $()
+}
+
 function getStreamId(id) {
 	var i = id.indexOf('~')
 	if (i >= 0) {
@@ -219,7 +230,7 @@ function selectedValue(el) {
 }
 
 function multiSelectValues(sel) {
-	var raw = $(sel).val()
+	var raw = (typeof sel === 'string' ? jqEl(sel) : $(sel)).val()
 	if (raw == null || raw === undefined) {
 		return []
 	}
@@ -275,9 +286,9 @@ function streamFormPayload(n) {
 		Mode: selectedValue(document.getElementById('mode' + n)),
 		RunningMode: selectedValue(document.getElementById('runningmode' + n)),
 		OutputMode: selectedValue(document.getElementById('outputmode' + n)),
-		VStreamId: $('#vStreamId' + n).val() || "max",
-		AStreamId: joinMultiSelect('#aStreamId' + n) || "lang=en",
-		SStreamId: joinMultiSelect('#sStreamId' + n),
+		VStreamId: jqEl('vStreamId' + n).val() || "max",
+		AStreamId: joinMultiSelect('aStreamId' + n) || "lang=en",
+		SStreamId: joinMultiSelect('sStreamId' + n),
 		CdmType: selectedValue(document.getElementById('cdmtype' + n)),
 		CdmMode: selectedValue(document.getElementById('cdmmode' + n)),
 		Cdm: fieldValue('cdm' + n),
@@ -301,15 +312,15 @@ function streamFormPayload(n) {
 		Bind: fieldValue('bind' + n),
 		Proxy: fieldValue('proxy' + n),
 		Doh: fieldValue('doh' + n),
-		NetworkScope: multiSelectValues('#networkscope' + n).toString(),
+		NetworkScope: multiSelectValues('networkscope' + n).toString(),
 		RangeStartTime: isoFromParts(document.getElementById('rangeStartDate' + n), document.getElementById('rangeStartTime' + n)),
 		RangeEndTime: isoFromParts(document.getElementById('rangeEndDate' + n), document.getElementById('rangeEndTime' + n))
 	}
 	return payload
 }
 
-function refreshSelectPicker(sel) {
-	var $el = $(sel);
+function refreshSelectPicker(id) {
+	var $el = jqEl(id);
 	if ($el.length === 0) {
 		return;
 	}
@@ -334,11 +345,11 @@ function streamStartPayload(n) {
 	if (keysEl && keysEl.value.trim()) {
 		payload.Keys = keysEl.value
 	}
-	var video = $('#vStreamId' + n).val()
+	var video = jqEl('vStreamId' + n).val()
 	if (video) {
 		payload.VStreamId = video
 	}
-	var audio = joinMultiSelect('#aStreamId' + n)
+	var audio = joinMultiSelect('aStreamId' + n)
 	if (audio) {
 		payload.AStreamId = audio
 	}
@@ -1831,21 +1842,42 @@ async function populateStream(item) {
 	document.getElementById('proxy' + id).value = item.Stream.Proxy || "";
 	document.getElementById('bind' + id).value = item.Stream.Bind || "";
 	document.getElementById('doh' + id).value = item.Stream.Doh || "";
-	$('#networkscope' + id).val((item.Stream.NetworkScope || "").split(","));
-	$('#networkscope' + id).selectpicker("refresh");
+	jqEl('networkscope' + id).val((item.Stream.NetworkScope || "").split(","));
+	refreshSelectPicker('networkscope' + id);
 
-	// Video
 	var vStreamId = 'vStreamId' + id
-	$('#' + vStreamId).empty();
+	var aStreamId = 'aStreamId' + id
+	var sStreamId = 'sStreamId' + id
+	var vStreamIdDiv = 'vStreamIdDiv' + id
+	var aStreamIdDiv = 'aStreamIdDiv' + id
+	var sStreamIdDiv = 'sStreamIdDiv' + id
+
+	if ( item.Stream.VideoList != null && item.Stream.VideoList.length > 0 ) {
+		document.getElementById(vStreamIdDiv).style.display = 'block';
+	} else {
+		document.getElementById(vStreamIdDiv).style.display = 'none';
+	}
+	if ( item.Stream.AudioList != null && item.Stream.AudioList.length > 0 ) {
+		document.getElementById(aStreamIdDiv).style.display = 'block';
+	} else {
+		document.getElementById(aStreamIdDiv).style.display = 'none';
+	}
+	if ( item.Stream.SubtitlesList != null && item.Stream.SubtitlesList.length > 0 ) {
+		document.getElementById(sStreamIdDiv).style.display = 'block';
+	} else {
+		document.getElementById(sStreamIdDiv).style.display = 'none';
+	}
+
+	jqEl(vStreamId).empty();
 
 	var videoSel = item.Stream.Video || "max";
 	if (videoSel == "best") {
 		videoSel = "max";
 	}
 	sel = (videoSel == "max" || videoSel == "") ? "selected" : "";
-	$('#' + vStreamId).append('<option ' + sel + ' value="max">Max quality</option>');
+	jqEl(vStreamId).append('<option ' + sel + ' value="max">Max quality</option>');
 	sel = (videoSel == "all") ? "selected" : "";
-	$('#' + vStreamId).append('<option ' + sel + ' value="all">All qualities</option>');
+	jqEl(vStreamId).append('<option ' + sel + ' value="all">All qualities</option>');
 
 	if (item.Stream.VideoList != null) {
 		for (i=0; i<item.Stream.VideoList.length; i++) {
@@ -1871,26 +1903,24 @@ async function populateStream(item) {
 				}
 			}
 
-			$('#' + vStreamId).append('<option ' + sel + ' data-subtext="' + dataSubtext + '" value="'+item.Stream.VideoList[i].Id+'">'+item.Stream.VideoList[i].Desc+'</option>');
+			jqEl(vStreamId).append('<option ' + sel + ' data-subtext="' + dataSubtext + '" value="'+item.Stream.VideoList[i].Id+'">'+item.Stream.VideoList[i].Desc+'</option>');
 		}
 	}
-	refreshSelectPicker('#' + vStreamId);
+	refreshSelectPicker(vStreamId);
 
-	// Audio
-	var aStreamId = 'aStreamId' + id
-	$('#' + aStreamId).empty();
+	jqEl(aStreamId).empty();
 	if (item.Stream.Audio == "all") {
 		sel = "selected"
 	} else {
 		sel = ""
 	}
-	$('#' + aStreamId).append('<option ' + sel + ' value="all">All</option>');
+	jqEl(aStreamId).append('<option ' + sel + ' value="all">All</option>');
 	if (item.Stream.Audio == "none") {
 		sel = "selected"
 	} else {
 		sel = ""
 	}
-	$('#' + aStreamId).append('<option ' + sel + ' value="none">Disabled</option>');
+	jqEl(aStreamId).append('<option ' + sel + ' value="none">Disabled</option>');
 	if (item.Stream.AudioList != null) {
 		for (i=0; i<item.Stream.AudioList.length; i++) {
 			sel = ""
@@ -1914,20 +1944,18 @@ async function populateStream(item) {
 				}
 			}
 
-			$('#' + aStreamId).append('<option ' + sel + ' data-subtext="' + dataSubtext + '" value="'+item.Stream.AudioList[i].Id+'">'+item.Stream.AudioList[i].Desc+'</option>');
+			jqEl(aStreamId).append('<option ' + sel + ' data-subtext="' + dataSubtext + '" value="'+item.Stream.AudioList[i].Id+'">'+item.Stream.AudioList[i].Desc+'</option>');
 		}
 	}
-	refreshSelectPicker('#' + aStreamId);
+	refreshSelectPicker(aStreamId);
 
-	// Subtitles
-	var sStreamId = 'sStreamId' + id
-	$('#' + sStreamId).empty();
+	jqEl(sStreamId).empty();
 	if (item.Stream.Subtitles == "all") {
 		sel = "selected"
 	} else {
 		sel = ""
 	}
-	$('#' + sStreamId).append('<option ' + sel + ' value="all">All</option>');
+	jqEl(sStreamId).append('<option ' + sel + ' value="all">All</option>');
 	if (item.Stream.SubtitlesList != null) {
 		for (i=0; i<item.Stream.SubtitlesList.length; i++) {
 			sel = ""
@@ -1937,29 +1965,10 @@ async function populateStream(item) {
 				}
 			});
 
-			$('#' + sStreamId).append('<option ' + sel + ' value="'+item.Stream.SubtitlesList[i].Id+'">'+item.Stream.SubtitlesList[i].Desc+'</option>');
+			jqEl(sStreamId).append('<option ' + sel + ' value="'+item.Stream.SubtitlesList[i].Id+'">'+item.Stream.SubtitlesList[i].Desc+'</option>');
 		}
 	}
-	refreshSelectPicker('#' + sStreamId);
-
-	vStreamIdDiv = 'vStreamIdDiv' + id
-	aStreamIdDiv = 'aStreamIdDiv' + id
-	sStreamIdDiv = 'sStreamIdDiv' + id
-	if ( item.Stream.VideoList != null && item.Stream.VideoList.length > 0 ) {
-		document.getElementById(vStreamIdDiv).style.display = 'block';
-	} else {
-		document.getElementById(vStreamIdDiv).style.display = 'none';
-	}
-	if ( item.Stream.AudioList != null && item.Stream.AudioList.length > 0 ) {
-		document.getElementById(aStreamIdDiv).style.display = 'block';
-	} else {
-		document.getElementById(aStreamIdDiv).style.display = 'none';
-	}
-	if ( item.Stream.SubtitlesList != null && item.Stream.SubtitlesList.length > 0 ) {
-		document.getElementById(sStreamIdDiv).style.display = 'block';
-	} else {
-		document.getElementById(sStreamIdDiv).style.display = 'none';
-	}
+	refreshSelectPicker(sStreamId);
 
 	startDate = 'rangeStartDate' + id
 	startTime = 'rangeStartTime' + id
@@ -2490,9 +2499,9 @@ async function updateStreamsBody(table, init, providerId) {
 					document.getElementById('manifestscript' + id).onchange = updateStream;
 					document.getElementById('manifestUrl' + id).onchange = updateStream;
 					document.getElementById('showheaders' + id).onclick = showHideHeaders;
-					$('#vStreamId' + id).on('hidden.bs.select', updateStream);
-					$('#aStreamId' + id).on('hidden.bs.select', updateStream);
-					$('#sStreamId' + id).on('hidden.bs.select', updateStream);
+					jqEl('vStreamId' + id).on('hidden.bs.select', updateStream);
+					jqEl('aStreamId' + id).on('hidden.bs.select', updateStream);
+					jqEl('sStreamId' + id).on('hidden.bs.select', updateStream);
 					document.getElementById('cdm' + id).onchange = updateStream;
 					document.getElementById('cdmtype' + id).onchange = updateStream;
 					document.getElementById('cdmmode' + id).onchange = updateStream;
@@ -2620,7 +2629,7 @@ async function updateStreamsBody(table, init, providerId) {
 							document.getElementById('bind' + n).setAttribute("disabled","disabled");
 							document.getElementById('doh' + n).setAttribute("disabled","disabled");
 							document.getElementById('networkscope' + n).setAttribute("disabled","disabled");
-							$('#networkscope' + n).selectpicker("refresh");
+							refreshSelectPicker('networkscope' + n);
 							document.getElementById('runningmode' + n).setAttribute("disabled","disabled");
 							document.getElementById('outputmode' + n).setAttribute("disabled","disabled");
 							document.getElementById('refresh' + n).setAttribute("disabled","disabled");
@@ -2655,7 +2664,7 @@ async function updateStreamsBody(table, init, providerId) {
 							document.getElementById('bind' + n).removeAttribute("disabled");
 							document.getElementById('doh' + n).removeAttribute("disabled");
 							document.getElementById('networkscope' + n).removeAttribute("disabled");
-							$('#networkscope' + n).selectpicker("refresh");
+							refreshSelectPicker('networkscope' + n);
 							document.getElementById('runningmode' + n).removeAttribute("disabled");
 							document.getElementById('outputmode' + n).removeAttribute("disabled");
 							document.getElementById('refresh' + n).removeAttribute("disabled");
@@ -2738,9 +2747,9 @@ async function updateStreamsBody(table, init, providerId) {
 							document.getElementById('timeRangeDiv' + n).style.display = 'none';
 						}
 
-						refreshSelectPicker('#vStreamId' + n);
-						refreshSelectPicker('#aStreamId' + n);
-						refreshSelectPicker('#sStreamId' + n);
+						refreshSelectPicker('vStreamId' + n);
+						refreshSelectPicker('aStreamId' + n);
+						refreshSelectPicker('sStreamId' + n);
 
 						text = 'Please refresh for more info';
 
