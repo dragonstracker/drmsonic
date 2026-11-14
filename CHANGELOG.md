@@ -21,7 +21,7 @@ Versions follow the release tags on GitHub.
 - Quality/audio/subtitle selects work with `~` DOM ids: jQuery `#id~x` was parsed as a sibling selector; use getElementById-backed jqEl.
 - Video option **Best quality** (o11 parity); pinned track 404/410 falls back to the next working representation.
 - Audio picker shows the active track: `lang=en` resolves to a concrete AudioList id so the select is not left on Nothing selected.
-- Live DASH re-anchors only when the segment cursor is ahead of the current timeline (orphaned after a slide/reset), snapping to the live edge once — not when caught up waiting for the next segment.
+- Multi-period live DASH (ad breaks) now follows the last period instead of the first, fixing endless "Waiting for segments" and short repeated chunks after the first period ended.
 
 ## [1.1.4] — 2026-11-11
 

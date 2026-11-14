@@ -114,3 +114,37 @@ func TestMultiPeriodFirstPlayable(t *testing.T) {
 		t.Fatalf("tracks = %+v", m.Video)
 	}
 }
+
+func TestLiveMultiPeriodFollowsLast(t *testing.T) {
+	const mpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="dynamic" minimumUpdatePeriod="PT5S">
+  <Period id="ad" start="PT0S" duration="PT4S">
+    <AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate timescale="1000" initialization="init.mp4" media="$Number$.m4s" startNumber="1">
+        <SegmentTimeline><S t="0" d="2000" r="1"/></SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="v" codecs="avc1.4d401f" bandwidth="1000"/>
+    </AdaptationSet>
+  </Period>
+  <Period id="live" start="PT4S">
+    <AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate timescale="1000" initialization="init.mp4" media="$Number$.m4s" startNumber="3">
+        <SegmentTimeline><S t="4000" d="2000" r="1"/></SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="v" codecs="avc1.4d401f" bandwidth="1000"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`
+	u, _ := url.Parse("https://cdn.example.com/x/manifest.mpd")
+	m, err := ParseMPD([]byte(mpd), u)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(m.Video) != 1 || len(m.All) != 1 {
+		t.Fatalf("tracks = %d video, %d all", len(m.Video), len(m.All))
+	}
+	refs := m.Video[0].TailSegments(0)
+	if len(refs) != 2 || refs[0].Time != 4000 || refs[0].Number != 3 {
+		t.Fatalf("refs = %+v", refs)
+	}
+}

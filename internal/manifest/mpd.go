@@ -283,12 +283,13 @@ func ParseMPD(data []byte, pageURL *url.URL) (*Manifest, error) {
 			}
 		}
 
-		if len(m.Video) > startVideo || len(m.Audio) > startAudio {
-			break
-		}
-		if len(m.All) == startAll {
+		if len(m.Video) == startVideo && len(m.Audio) == startAudio {
 			continue
 		}
+		if m.Static {
+			break
+		}
+		m.Video, m.Audio, m.All = m.Video[startVideo:], m.Audio[startAudio:], m.All[startAll:]
 	}
 	return m, nil
 }
