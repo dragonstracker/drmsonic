@@ -54,6 +54,15 @@ jobs:
           sha256sum drmsonic-linux-amd64 drmsonic-linux-arm64 drmsonic-windows-amd64.exe install.sh uninstall.sh > SHA256SUMS
 
 
+      - name: replace previous dev assets
+        if: steps.ver.outputs.tag == 'dev'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for name in drmsonic-linux-amd64 drmsonic-linux-arm64 drmsonic-windows-amd64.exe install.sh uninstall.sh SHA256SUMS; do
+            gh release delete-asset dev "$name" -y 2>/dev/null || true
+          done
+
       - name: publish release
         uses: softprops/action-gh-release@v2
         with:
