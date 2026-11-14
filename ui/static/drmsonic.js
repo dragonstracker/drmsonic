@@ -211,262 +211,133 @@ async function playerSubtitlesSelectOnchange(e) {
 	hls.subtitleTrack  = document.getElementById('playerSubtitlesSelect').selectedIndex
 }
 
+function selectedValue(el) {
+	if (!el || el.selectedIndex < 0 || !el.options || !el.options.length) {
+		return ""
+	}
+	return el.options[el.selectedIndex].value
+}
+
 function multiSelectValues(sel) {
 	var raw = $(sel).val()
 	if (raw == null || raw === undefined) {
 		return []
 	}
-	if (Array.isArray(raw)) {
-		return raw
-	}
-	return [raw]
+	return Array.isArray(raw) ? raw : [raw]
 }
 
-async function persistStreamFields(n) {
-	if (!document.getElementById('manifestUrl' + n) || !document.getElementById('keys' + n)) {
-		return true;
-	}
-
-	var nameEl = document.getElementById('name' + n)
-	if (!nameEl) {
-		return true;
-	}
-	var name = nameEl.innerText
-
-	var vStreamId = $('#vStreamId' + n).val() || ""
-	var aStreamId = ""
-	multiSelectValues('#aStreamId' + n).forEach(function(i) {
+function joinMultiSelect(sel) {
+	var out = ""
+	multiSelectValues(sel).forEach(function(i) {
 		if (i == "all") {
-			aStreamId = "all"
+			out = "all"
 		} else if (i == "none") {
-			aStreamId = "none"
-		} else if (aStreamId != "all" && aStreamId != "none") {
-			if (aStreamId.length != 0 ) {
-				aStreamId += ","
+			out = "none"
+		} else if (out != "all" && out != "none") {
+			if (out.length) {
+				out += ","
 			}
-			aStreamId += i
+			out += i
 		}
-	});
-	var sStreamId = ""
-	multiSelectValues('#sStreamId' + n).forEach(function(i) {
-		if (i == "all") {
-			sStreamId = "all"
-		}
-		if (sStreamId != "all") {
-			if (sStreamId.length != 0 ) {
-				sStreamId += ","
-			}
-			sStreamId += i
-		}
-	});
-
-	var prevParams = streamsPrevParams.get(n);
-	if (!prevParams) {
-		prevParams = {
-			Manifest: "",
-			ManifestScript: "",
-			Mode: "",
-			RunningMode: "",
-			OutputMode: "",
-			Video: "",
-			Audio: "",
-			Subtitles: "",
-			CdmType: "",
-			CdmMode: "",
-			Cdm: "",
-			Keys: [],
-			OnDemand: false,
-			Autostart: false,
-			SessionManifest: false,
-			SpeedUp: false,
-			UseCdm: false
-		};
-		streamsPrevParams.set(n, prevParams);
-	}
-
-	var prevKeys = ""
-	if (prevParams.Keys) {
-		for (let i = 0; i <  prevParams.Keys.length; i++) {
-			prevKeys += prevParams.Keys[i]
-			if ( i < prevParams.Keys.length-1) {
-				prevKeys += "\n"
-			}
-		}
-	}
-
-	var startTime = document.getElementById('rangeStartTime' + n).value
-	var endTime = document.getElementById('rangeEndTime' + n).value
-	if (startTime == '') {
-		startTime = "00:00"
-	}
-	if (endTime == '') {
-		endTime = "00:00"
-	}
-
-	var start = ""
-	var end = ""
-	try {
-		start = new Date(document.getElementById('rangeStartDate' + n).value + 'T' + startTime + ":00").toISOString()
-	} catch (error) {
-		start = ""
-	}
-	try {
-		end = new Date(document.getElementById('rangeEndDate' + n).value + 'T' + endTime + ":00").toISOString()
-	} catch (error) {
-		end = ""
-	}
-
-	var data = {
-		Action : 'updatestream',
-		ProviderId : getProviderId(n),
-		Streams : [
-			{
-				Name : name,
-				Id : getStreamId(n),
-				ManifestUrl : document.getElementById('manifestUrl' + n).value,
-				ManifestScript : document.getElementById('manifestscript' + n).value,
-				Mode : document.getElementById('mode' + n).options[document.getElementById('mode' + n).selectedIndex].value,
-				RunningMode : document.getElementById('runningmode' + n).options[document.getElementById('runningmode' + n).selectedIndex].value,
-				OutputMode : document.getElementById('outputmode' + n).options[document.getElementById('outputmode' + n).selectedIndex].value,
-				VStreamId: vStreamId,
-				AStreamId: aStreamId,
-				SStreamId: sStreamId,
-				CdmType: document.getElementById('cdmtype' + n).options[document.getElementById('cdmtype' + n).selectedIndex].value,
-				CdmMode: document.getElementById('cdmmode' + n).options[document.getElementById('cdmmode' + n).selectedIndex].value,
-				Cdm: document.getElementById('cdm' + n).value,
-				PRLAVersion: document.getElementById('prlaversion' + n).value,
-				PRClientVersion: document.getElementById('prclientversion' + n).value,
-				PRCustomData: document.getElementById('prcustomdata' + n).value,
-				Keys: document.getElementById('keys' + n).value,
-				OnDemand: document.getElementById('ondemand' + n).checked,
-				Autostart: document.getElementById('autostart' + n).checked,
-				PipeOutputParams: document.getElementById('pipeoutputparams' + n).value,
-				ProtoOutputParams: document.getElementById('protooutputparams' + n).value,
-				SessionManifest: document.getElementById('sessionmanifest' + n).checked,
-				SpeedUp: document.getElementById('speedup' + n).checked,
-				UseCdm: document.getElementById('usecdm' + n).checked,
-				NetworkOverride: document.getElementById('network' + n).checked,
-				ModeOverride: document.getElementById('modeoverride' + n).checked,
-				RecordEvent: document.getElementById('recordevent' + n).checked,
-				IgnoreUpdate: document.getElementById('ignoreupdate' + n).checked,
-				FixIvSize: document.getElementById('fixivsize' + n).checked,
-				TimeRange: document.getElementById('timerange' + n).checked,
-				Bind: document.getElementById('bind' + n).value,
-				Proxy: document.getElementById('proxy' + n).value,
-				Doh: document.getElementById('doh' + n).value,
-				NetworkScope:  multiSelectValues('#networkscope' + n).toString(),
-				RangeStartTime: start,
-				RangeEndTime: end
-			}
-		],
-
-		PrevStreams : [
-			{
-				Name : name,
-				Id : getStreamId(n),
-				ManifestUrl: prevParams.Manifest,
-				ManifestScript: prevParams.ManifestScript,
-				Mode: prevParams.Mode,
-				RunningMode: prevParams.RunningMode,
-				OutputMode: prevParams.OutputMode,
-				VStreamId: prevParams.Video,
-				AStreamId: prevParams.Audio,
-				SStreamId: prevParams.Subtitles,
-				CdmType: prevParams.CdmType,
-				CdmMode: prevParams.CdmMode,
-				Cdm: prevParams.Cdm,
-				PRLAVersion: prevParams.PRLAVersion,
-				PRClientVersion: prevParams.PRClientVersion,
-				PRCustomData: prevParams.PRCustomData,
-				Keys: prevKeys,
-				OnDemand : prevParams.OnDemand,
-				Autostart: prevParams.Autostart,
-				PipeOutputParams: prevParams.PipeOutputParams,
-				ProtoOutputParams: prevParams.ProtoOutputParams,
-				SessionManifest: prevParams.SessionManifest,
-				SpeedUp: prevParams.SpeedUp,
-				UseCdm: prevParams.UseCdm,
-				NetworkOverride: prevParams.NetworkOverride,
-				ModeOverride: prevParams.ModeOverride,
-				RecordEvent: prevParams.RecordEvent,
-				IgnoreUpdate: prevParams.IgnoreUpdate,
-				FixIvSize: prevParams.FixIvSize,
-				TimeRange: prevParams.TimeRange,
-				Bind: prevParams.Bind,
-				Proxy: prevParams.Proxy,
-				Doh: prevParams.Doh,
-				NetworkScope: prevParams.NetworkScope,
-				UserAgent: prevParams.UserAgent,
-				RangeStartTime: prevParams.RangeStartTime,
-				RangeEndTime: prevParams.RangeEndTime
-			}
-		]
-	}
-
-	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-		},
-		body: JSON.stringify(data),
 	})
+	return out
+}
 
-	var text = await response.text();
-	if (!response.ok) {
-		showStatusWindow(text);
-		return false;
+function isoFromParts(dateEl, timeEl) {
+	try {
+		var t = (timeEl && timeEl.value) ? timeEl.value : "00:00"
+		return new Date(dateEl.value + 'T' + t + ":00").toISOString()
+	} catch (error) {
+		return ""
 	}
+}
 
-	prevParams.Manifest = data.Streams[0].ManifestUrl
-	prevParams.ManifestScript = data.Streams[0].ManifestScript
-	prevParams.Mode = data.Streams[0].Mode
-	prevParams.RunningMode = data.Streams[0].RunningMode
-	prevParams.OutputMode = data.Streams[0].OutputMode
-	prevParams.Video = data.Streams[0].VStreamId
-	prevParams.Audio = data.Streams[0].AStreamId
-	prevParams.Subtitles = data.Streams[0].SStreamId
-	prevParams.CdmType = data.Streams[0].CdmType
-	prevParams.CdmMode = data.Streams[0].CdmMode
-	prevParams.Cdm = data.Streams[0].Cdm
-	prevParams.PRClientVersion = data.Streams[0].PRClientVersion
-	prevParams.PRCustomData = data.Streams[0].PRCustomData
+function streamFormPayload(n) {
+	if (!document.getElementById('manifestUrl' + n) || !document.getElementById('keys' + n)) {
+		return null
+	}
+	var nameEl = document.getElementById('name' + n)
+	return {
+		Name: nameEl ? nameEl.innerText : "",
+		Id: getStreamId(n),
+		ManifestUrl: document.getElementById('manifestUrl' + n).value,
+		ManifestScript: document.getElementById('manifestscript' + n).value,
+		Mode: selectedValue(document.getElementById('mode' + n)),
+		RunningMode: selectedValue(document.getElementById('runningmode' + n)),
+		OutputMode: selectedValue(document.getElementById('outputmode' + n)),
+		VStreamId: $('#vStreamId' + n).val() || "",
+		AStreamId: joinMultiSelect('#aStreamId' + n),
+		SStreamId: joinMultiSelect('#sStreamId' + n),
+		CdmType: selectedValue(document.getElementById('cdmtype' + n)),
+		CdmMode: selectedValue(document.getElementById('cdmmode' + n)),
+		Cdm: document.getElementById('cdm' + n).value,
+		PRLAVersion: document.getElementById('prlaversion' + n).value,
+		PRClientVersion: document.getElementById('prclientversion' + n).value,
+		PRCustomData: document.getElementById('prcustomdata' + n).value,
+		Keys: document.getElementById('keys' + n).value,
+		OnDemand: document.getElementById('ondemand' + n).checked,
+		Autostart: document.getElementById('autostart' + n).checked,
+		PipeOutputParams: document.getElementById('pipeoutputparams' + n).value,
+		ProtoOutputParams: document.getElementById('protooutputparams' + n).value,
+		SessionManifest: document.getElementById('sessionmanifest' + n).checked,
+		SpeedUp: document.getElementById('speedup' + n).checked,
+		UseCdm: document.getElementById('usecdm' + n).checked,
+		NetworkOverride: document.getElementById('network' + n).checked,
+		ModeOverride: document.getElementById('modeoverride' + n).checked,
+		RecordEvent: document.getElementById('recordevent' + n).checked,
+		IgnoreUpdate: document.getElementById('ignoreupdate' + n).checked,
+		FixIvSize: document.getElementById('fixivsize' + n).checked,
+		TimeRange: document.getElementById('timerange' + n).checked,
+		Bind: document.getElementById('bind' + n).value,
+		Proxy: document.getElementById('proxy' + n).value,
+		Doh: document.getElementById('doh' + n).value,
+		NetworkScope: multiSelectValues('#networkscope' + n).toString(),
+		RangeStartTime: isoFromParts(document.getElementById('rangeStartDate' + n), document.getElementById('rangeStartTime' + n)),
+		RangeEndTime: isoFromParts(document.getElementById('rangeEndDate' + n), document.getElementById('rangeEndTime' + n))
+	}
+}
+
+function rememberStreamPayload(n, payload) {
+	var prevParams = streamsPrevParams.get(n) || {}
+	prevParams.Manifest = payload.ManifestUrl
+	prevParams.ManifestScript = payload.ManifestScript
+	prevParams.Mode = payload.Mode
+	prevParams.RunningMode = payload.RunningMode
+	prevParams.OutputMode = payload.OutputMode
+	prevParams.Video = payload.VStreamId
+	prevParams.Audio = payload.AStreamId
+	prevParams.Subtitles = payload.SStreamId
+	prevParams.CdmType = payload.CdmType
+	prevParams.CdmMode = payload.CdmMode
+	prevParams.Cdm = payload.Cdm
+	prevParams.PRClientVersion = payload.PRClientVersion
+	prevParams.PRCustomData = payload.PRCustomData
 	prevParams.Keys = []
-	if (data.Streams[0].Keys) {
-		String(data.Streams[0].Keys).split(/\r?\n|,/).forEach(function(id) {
-			id = id.trim()
-			if (id) {
-				prevParams.Keys.push(id)
+	if (payload.Keys) {
+		String(payload.Keys).split(/\r?\n|,/).forEach(function(line) {
+			line = line.trim()
+			if (line) {
+				prevParams.Keys.push(line)
 			}
-		});
+		})
 	}
-	prevParams.OnDemand = data.Streams[0].OnDemand
-	prevParams.Autostart = data.Streams[0].Autostart
-	prevParams.PipeOutputParams = data.Streams[0].PipeOutputParams
-	prevParams.ProtoOutputParams = data.Streams[0].ProtoOutputParams
-	prevParams.SessionManifest = data.Streams[0].SessionManifest
-	prevParams.SpeedUp = data.Streams[0].SpeedUp
-	prevParams.UseCdm = data.Streams[0].UseCdm
-	prevParams.NetworkOverride = data.Streams[0].NetworkOverride
-	prevParams.ModeOverride = data.Streams[0].ModeOverride
-	prevParams.RecordEvent = data.Streams[0].RecordEvent
-	prevParams.IgnoreUpdate = data.Streams[0].IgnoreUpdate
-	prevParams.FixIvSize = data.Streams[0].FixIvSize
-	prevParams.Bind = data.Streams[0].Bind
-	prevParams.Proxy = data.Streams[0].Proxy
-	prevParams.Doh = data.Streams[0].Doh
-	prevParams.NetworkScope = data.Streams[0].NetworkScope
-	prevParams.UserAgent = data.Streams[0].UserAgent
-	prevParams.ManifestScriptParam = data.Streams[0].ManifestScriptParam
-	prevParams.CdmParam = data.Streams[0].CdmParam
-
+	prevParams.OnDemand = payload.OnDemand
+	prevParams.Autostart = payload.Autostart
+	prevParams.PipeOutputParams = payload.PipeOutputParams
+	prevParams.ProtoOutputParams = payload.ProtoOutputParams
+	prevParams.SessionManifest = payload.SessionManifest
+	prevParams.SpeedUp = payload.SpeedUp
+	prevParams.UseCdm = payload.UseCdm
+	prevParams.NetworkOverride = payload.NetworkOverride
+	prevParams.ModeOverride = payload.ModeOverride
+	prevParams.RecordEvent = payload.RecordEvent
+	prevParams.IgnoreUpdate = payload.IgnoreUpdate
+	prevParams.FixIvSize = payload.FixIvSize
+	prevParams.Bind = payload.Bind
+	prevParams.Proxy = payload.Proxy
+	prevParams.Doh = payload.Doh
+	prevParams.NetworkScope = payload.NetworkScope
 	streamsPrevParams.set(n, prevParams)
-	if (document.getElementById('saveall')) {
-		document.getElementById('saveall').removeAttribute("disabled");
-	}
-	if (document.getElementById('saveprovider')) {
-		document.getElementById('saveprovider').removeAttribute("disabled");
-	}
-	return true;
 }
 
 async function updateStream(e) {
@@ -482,7 +353,80 @@ async function updateStream(e) {
 		}
 	}
 
-	await persistStreamFields(n);
+	var payload = streamFormPayload(n)
+	if (!payload) {
+		return
+	}
+
+	var prevParams = streamsPrevParams.get(n) || {}
+	var prevKeys = ""
+	if (prevParams.Keys) {
+		prevKeys = prevParams.Keys.join("\n")
+	}
+
+	var data = {
+		Action: 'updatestream',
+		ProviderId: getProviderId(n),
+		Streams: [payload],
+		PrevStreams: [{
+			Name: payload.Name,
+			Id: payload.Id,
+			ManifestUrl: prevParams.Manifest || "",
+			ManifestScript: prevParams.ManifestScript || "",
+			Mode: prevParams.Mode || "",
+			RunningMode: prevParams.RunningMode || "",
+			OutputMode: prevParams.OutputMode || "",
+			VStreamId: prevParams.Video || "",
+			AStreamId: prevParams.Audio || "",
+			SStreamId: prevParams.Subtitles || "",
+			CdmType: prevParams.CdmType || "",
+			CdmMode: prevParams.CdmMode || "",
+			Cdm: prevParams.Cdm || "",
+			PRLAVersion: prevParams.PRLAVersion || "",
+			PRClientVersion: prevParams.PRClientVersion || "",
+			PRCustomData: prevParams.PRCustomData || "",
+			Keys: prevKeys,
+			OnDemand: !!prevParams.OnDemand,
+			Autostart: !!prevParams.Autostart,
+			PipeOutputParams: prevParams.PipeOutputParams || "",
+			ProtoOutputParams: prevParams.ProtoOutputParams || "",
+			SessionManifest: !!prevParams.SessionManifest,
+			SpeedUp: !!prevParams.SpeedUp,
+			UseCdm: !!prevParams.UseCdm,
+			NetworkOverride: !!prevParams.NetworkOverride,
+			ModeOverride: !!prevParams.ModeOverride,
+			RecordEvent: !!prevParams.RecordEvent,
+			IgnoreUpdate: !!prevParams.IgnoreUpdate,
+			FixIvSize: !!prevParams.FixIvSize,
+			TimeRange: !!prevParams.TimeRange,
+			Bind: prevParams.Bind || "",
+			Proxy: prevParams.Proxy || "",
+			Doh: prevParams.Doh || "",
+			NetworkScope: prevParams.NetworkScope || "",
+			UserAgent: prevParams.UserAgent || "",
+			RangeStartTime: prevParams.RangeStartTime || "",
+			RangeEndTime: prevParams.RangeEndTime || ""
+		}]
+	}
+
+	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		credentials: 'same-origin',
+		body: JSON.stringify(data),
+	})
+
+	text = await response.text();
+	if (!response.ok) {
+		showStatusWindow(text);
+		return
+	}
+
+	rememberStreamPayload(n, payload)
+	document.getElementById('saveall').removeAttribute("disabled");
+	document.getElementById('saveprovider').removeAttribute("disabled");
 };
 
 // DELETE onCLick
@@ -658,32 +602,33 @@ async function updateGlobal(e) {
 
 // START/STOP stream
 async function startStopClick(e, id) {
-
 	e.preventDefault();
 
-        if (!id) {
-                id = this.id
+	if (!id) {
+		id = this.id
 	}
-		
+
 	action = this.name
+	var n = null
+	var streamPayload = { Id: "" }
 
 	if (id == 'startall' || id == 'stopall') {
-		idsList = 'all'
+		streamPayload.Id = 'all'
 		var result = confirm("Are you sure you want to " + action + " all streams?");
 		if (result != true) {
 			return
 		}
 		providerId = document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value;
 	} else if (id == 'startautostart') {
-		idsList = 'autostart'
+		streamPayload.Id = 'autostart'
 		var result = confirm("Are you sure you want to " + action + " all autostart streams?");
 		if (result != true) {
 			return
 		}
 		providerId = document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value;
 	} else if (id == 'startpage' || this.id == 'stoppage') {
-		idsList = getPageIds()
-		if (idsList == "") {
+		streamPayload.Id = getPageIds()
+		if (streamPayload.Id == "") {
 			return;
 		}
 		var result = confirm("Are you sure you want to " + action + " all streams from page?");
@@ -693,30 +638,26 @@ async function startStopClick(e, id) {
 		providerId = document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value;
 	} else {
 		n = getId(id)
-		idsList = getStreamId(id)
-		if (document.getElementById('startStop' + n).innerHTML.includes('play.svg')) {
+		var btn = document.getElementById('startStop' + n)
+		if (!btn) {
+			return
+		}
+		if (btn.innerHTML.includes('play.svg')) {
 			action = 'start'
 		} else {
 			action = 'stop'
 		}
 		providerId = getProviderId(id)
-		if (action == 'start') {
-			try {
-				await persistStreamFields(n);
-			} catch (err) {
-				console.error(err);
-			}
+		streamPayload = streamFormPayload(n) || { Id: getStreamId(id) }
+		if (!streamPayload.Id) {
+			streamPayload.Id = getStreamId(id)
 		}
 	}
 
 	data = {
-		Action : action,
-		ProviderId : providerId,
-		Streams : [
-			{
-				Id : idsList,
-			}
-		]	
+		Action: action,
+		ProviderId: providerId,
+		Streams: [streamPayload]
 	}
 
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
@@ -724,12 +665,15 @@ async function startStopClick(e, id) {
 		headers: {
 			'Content-Type': 'application/json',
 		},
+		credentials: 'same-origin',
 		body: JSON.stringify(data),
 	})
 
 	if (!response.ok) {
 		text = await response.text();
 		showStatusWindow(text);
+	} else if (action == 'start' && n && streamPayload.ManifestUrl !== undefined) {
+		rememberStreamPayload(n, streamPayload)
 	}
 };
 

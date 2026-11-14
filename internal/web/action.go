@@ -389,6 +389,16 @@ func (s *Server) acStartStop(w http.ResponseWriter, req actionRequest) {
 	}
 	ids = filtered
 
+	payloadByID := map[string]map[string]any{}
+	for _, payload := range req.Streams {
+		id := str(mapGet(payload, "Id"))
+		if id == "" || id == "all" || id == "autostart" || strings.Contains(id, ",") {
+			continue
+		}
+		payloadByID[id] = payload
+	}
+
+	dirty := false
 	for i := range p.Streams {
 		st := &p.Streams[i]
 		if autostartOnly {
@@ -397,6 +407,10 @@ func (s *Server) acStartStop(w http.ResponseWriter, req actionRequest) {
 			}
 		} else if !matchIDs(ids, st.Id) {
 			continue
+		}
+		if payload, ok := payloadByID[st.Id]; ok && (req.Action == "start" || req.Action == "restart") {
+			applyStreamPayload(st, payload)
+			dirty = true
 		}
 		switch req.Action {
 		case "start":
@@ -407,6 +421,12 @@ func (s *Server) acStartStop(w http.ResponseWriter, req actionRequest) {
 		default:
 			s.stopChannel(p.Id, st.Id)
 			s.media.drop(p.Id, st.Id)
+		}
+	}
+	if dirty {
+		if err := s.store.Put(p); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
 	s.mgr.BumpGlobal()
