@@ -1156,40 +1156,58 @@ func providerToMap(p *config.Provider, withStreams bool) map[string]any {
 
 func applyStreamPayload(st *config.Stream, m map[string]any) {
 	if v, ok := m["Name"]; ok {
-		st.Name = str(v)
+		if s := strings.TrimSpace(str(v)); s != "" {
+			st.Name = s
+		}
 	}
 	if v, ok := m["ManifestUrl"]; ok {
-		st.Manifest = str(v)
+		if s := strings.TrimSpace(str(v)); s != "" {
+			st.Manifest = s
+		}
 	}
 	if v, ok := m["Manifest"]; ok && st.Manifest == "" {
 		st.Manifest = str(v)
 	}
 	if v, ok := m["Mode"]; ok {
-		st.Mode = str(v)
+		if s := strings.TrimSpace(str(v)); s != "" {
+			st.Mode = s
+		}
 	}
 	if v, ok := m["ManifestScript"]; ok {
 		st.ManifestScript = str(v)
 	}
 	if v, ok := m["RunningMode"]; ok {
-		st.RunningMode = str(v)
+		if s := strings.TrimSpace(str(v)); s != "" {
+			st.RunningMode = s
+		}
 	}
 	if v, ok := m["OutputMode"]; ok {
-		st.OutputMode = str(v)
+		if s := strings.TrimSpace(str(v)); s != "" {
+			st.OutputMode = s
+		}
 	}
 	if v, ok := m["VStreamId"]; ok {
-		st.Video = str(v)
+		if s := strings.TrimSpace(str(v)); s != "" {
+			st.Video = s
+		}
 	}
 	if v, ok := m["AStreamId"]; ok {
-		st.Audio = str(v)
+		if s := strings.TrimSpace(str(v)); s != "" {
+			st.Audio = s
+		}
 	}
 	if v, ok := m["SStreamId"]; ok {
 		st.Subtitles = str(v)
 	}
 	if v, ok := m["CdmType"]; ok {
-		st.CdmType = str(v)
+		if s := strings.TrimSpace(str(v)); s != "" {
+			st.CdmType = s
+		}
 	}
 	if v, ok := m["CdmMode"]; ok {
-		st.CdmMode = str(v)
+		if s := strings.TrimSpace(str(v)); s != "" {
+			st.CdmMode = s
+		}
 	}
 	if v, ok := m["Cdm"]; ok {
 		st.Cdm = str(v)

@@ -252,49 +252,85 @@ function isoFromParts(dateEl, timeEl) {
 	}
 }
 
+function fieldValue(id) {
+	var el = document.getElementById(id)
+	return el ? el.value : ""
+}
+
+function fieldChecked(id) {
+	var el = document.getElementById(id)
+	return !!(el && el.checked)
+}
+
 function streamFormPayload(n) {
 	if (!document.getElementById('manifestUrl' + n) || !document.getElementById('keys' + n)) {
 		return null
 	}
 	var nameEl = document.getElementById('name' + n)
-	return {
-		Name: nameEl ? nameEl.innerText : "",
+	var payload = {
+		Name: nameEl ? nameEl.innerText.trim() : "",
 		Id: getStreamId(n),
-		ManifestUrl: document.getElementById('manifestUrl' + n).value,
-		ManifestScript: document.getElementById('manifestscript' + n).value,
+		ManifestUrl: fieldValue('manifestUrl' + n),
+		ManifestScript: fieldValue('manifestscript' + n),
 		Mode: selectedValue(document.getElementById('mode' + n)),
 		RunningMode: selectedValue(document.getElementById('runningmode' + n)),
 		OutputMode: selectedValue(document.getElementById('outputmode' + n)),
-		VStreamId: $('#vStreamId' + n).val() || "",
-		AStreamId: joinMultiSelect('#aStreamId' + n),
+		VStreamId: $('#vStreamId' + n).val() || "max",
+		AStreamId: joinMultiSelect('#aStreamId' + n) || "lang=en",
 		SStreamId: joinMultiSelect('#sStreamId' + n),
 		CdmType: selectedValue(document.getElementById('cdmtype' + n)),
 		CdmMode: selectedValue(document.getElementById('cdmmode' + n)),
-		Cdm: document.getElementById('cdm' + n).value,
-		PRLAVersion: document.getElementById('prlaversion' + n).value,
-		PRClientVersion: document.getElementById('prclientversion' + n).value,
-		PRCustomData: document.getElementById('prcustomdata' + n).value,
-		Keys: document.getElementById('keys' + n).value,
-		OnDemand: document.getElementById('ondemand' + n).checked,
-		Autostart: document.getElementById('autostart' + n).checked,
-		PipeOutputParams: document.getElementById('pipeoutputparams' + n).value,
-		ProtoOutputParams: document.getElementById('protooutputparams' + n).value,
-		SessionManifest: document.getElementById('sessionmanifest' + n).checked,
-		SpeedUp: document.getElementById('speedup' + n).checked,
-		UseCdm: document.getElementById('usecdm' + n).checked,
-		NetworkOverride: document.getElementById('network' + n).checked,
-		ModeOverride: document.getElementById('modeoverride' + n).checked,
-		RecordEvent: document.getElementById('recordevent' + n).checked,
-		IgnoreUpdate: document.getElementById('ignoreupdate' + n).checked,
-		FixIvSize: document.getElementById('fixivsize' + n).checked,
-		TimeRange: document.getElementById('timerange' + n).checked,
-		Bind: document.getElementById('bind' + n).value,
-		Proxy: document.getElementById('proxy' + n).value,
-		Doh: document.getElementById('doh' + n).value,
+		Cdm: fieldValue('cdm' + n),
+		PRLAVersion: fieldValue('prlaversion' + n),
+		PRClientVersion: fieldValue('prclientversion' + n),
+		PRCustomData: fieldValue('prcustomdata' + n),
+		Keys: fieldValue('keys' + n),
+		OnDemand: fieldChecked('ondemand' + n),
+		Autostart: fieldChecked('autostart' + n),
+		PipeOutputParams: fieldValue('pipeoutputparams' + n),
+		ProtoOutputParams: fieldValue('protooutputparams' + n),
+		SessionManifest: fieldChecked('sessionmanifest' + n),
+		SpeedUp: fieldChecked('speedup' + n),
+		UseCdm: fieldChecked('usecdm' + n),
+		NetworkOverride: fieldChecked('network' + n),
+		ModeOverride: fieldChecked('modeoverride' + n),
+		RecordEvent: fieldChecked('recordevent' + n),
+		IgnoreUpdate: fieldChecked('ignoreupdate' + n),
+		FixIvSize: fieldChecked('fixivsize' + n),
+		TimeRange: fieldChecked('timerange' + n),
+		Bind: fieldValue('bind' + n),
+		Proxy: fieldValue('proxy' + n),
+		Doh: fieldValue('doh' + n),
 		NetworkScope: multiSelectValues('#networkscope' + n).toString(),
 		RangeStartTime: isoFromParts(document.getElementById('rangeStartDate' + n), document.getElementById('rangeStartTime' + n)),
 		RangeEndTime: isoFromParts(document.getElementById('rangeEndDate' + n), document.getElementById('rangeEndTime' + n))
 	}
+	return payload
+}
+
+function streamStartPayload(n) {
+	var payload = {
+		Id: getStreamId(n),
+		VStreamId: "max",
+		AStreamId: "lang=en"
+	}
+	var urlEl = document.getElementById('manifestUrl' + n)
+	var keysEl = document.getElementById('keys' + n)
+	if (urlEl && urlEl.value.trim()) {
+		payload.ManifestUrl = urlEl.value.trim()
+	}
+	if (keysEl && keysEl.value.trim()) {
+		payload.Keys = keysEl.value
+	}
+	var video = $('#vStreamId' + n).val()
+	if (video) {
+		payload.VStreamId = video
+	}
+	var audio = joinMultiSelect('#aStreamId' + n)
+	if (audio) {
+		payload.AStreamId = audio
+	}
+	return payload
 }
 
 function rememberStreamPayload(n, payload) {
@@ -648,9 +684,10 @@ async function startStopClick(e, id) {
 			action = 'stop'
 		}
 		providerId = getProviderId(id)
-		streamPayload = streamFormPayload(n) || { Id: getStreamId(id) }
-		if (!streamPayload.Id) {
-			streamPayload.Id = getStreamId(id)
+		if (action == 'start' || action == 'restart') {
+			streamPayload = streamStartPayload(n)
+		} else {
+			streamPayload = { Id: getStreamId(id) }
 		}
 	}
 
@@ -672,8 +709,17 @@ async function startStopClick(e, id) {
 	if (!response.ok) {
 		text = await response.text();
 		showStatusWindow(text);
-	} else if (action == 'start' && n && streamPayload.ManifestUrl !== undefined) {
-		rememberStreamPayload(n, streamPayload)
+		return
+	}
+	if (action == 'start' && n && streamPayload.ManifestUrl) {
+		var prev = streamsPrevParams.get(n) || {}
+		prev.Manifest = streamPayload.ManifestUrl
+		if (streamPayload.Keys) {
+			prev.Keys = String(streamPayload.Keys).split(/\r?\n/).map(function(x){ return x.trim() }).filter(Boolean)
+		}
+		prev.Video = streamPayload.VStreamId || "max"
+		prev.Audio = streamPayload.AStreamId || "lang=en"
+		streamsPrevParams.set(n, prev)
 	}
 };
 
