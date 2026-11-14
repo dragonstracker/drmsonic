@@ -20,6 +20,7 @@ Versions follow the release tags on GitHub.
 - Quality dropdown appears after probe on stopped streams: BumpStream now creates channel state so the panel reloads VideoList into the select.
 - Quality/audio/subtitle selects work with `~` DOM ids: jQuery `#id~x` was parsed as a sibling selector; use getElementById-backed jqEl.
 - Video option **Best quality** (o11 parity); pinned track 404/410 falls back to the next working representation.
+- Audio picker shows the active track: `lang=en` resolves to a concrete AudioList id so the select is not left on Nothing selected.
 
 ## [1.1.4] — 2026-11-11
 

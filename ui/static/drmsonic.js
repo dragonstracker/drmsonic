@@ -331,6 +331,46 @@ function refreshSelectPicker(id) {
 	}
 }
 
+function audioTrackSelected(track, audioSel) {
+	var parts = String(audioSel || "").split(',')
+	for (var i = 0; i < parts.length; i++) {
+		var aid = String(parts[i] || "").trim()
+		if (!aid) {
+			continue
+		}
+		if (aid === "all" || track.Id === aid) {
+			return true
+		}
+		var pref = ""
+		if (aid.indexOf("lang=") === 0) {
+			pref = aid.slice(5)
+		} else if (aid.indexOf("desc:") === 0) {
+			pref = aid.slice(5)
+		} else {
+			continue
+		}
+		pref = pref.toLowerCase()
+		if (!pref) {
+			continue
+		}
+		var aliases = [pref]
+		if (pref === "en") {
+			aliases.push("eng")
+		} else if (pref === "eng") {
+			aliases.push("en")
+		}
+		var lang = String(track.Language || "").toLowerCase()
+		var desc = String(track.Desc || "").toLowerCase()
+		var id = String(track.Id || "").toLowerCase()
+		for (var a = 0; a < aliases.length; a++) {
+			if (lang === aliases[a] || desc === aliases[a] || id.indexOf(aliases[a]) >= 0) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 function streamStartPayload(n) {
 	var payload = {
 		Id: getStreamId(n),
@@ -1906,14 +1946,18 @@ async function populateStream(item) {
 	refreshSelectPicker(vStreamId);
 
 	jqEl(aStreamId).empty();
-	if (item.Stream.Audio == "all") {
+	var audioSel = item.Stream.Audio || ""
+	var audioSelected = []
+	if (audioSel == "all") {
 		sel = "selected"
+		audioSelected = ["all"]
 	} else {
 		sel = ""
 	}
 	jqEl(aStreamId).append('<option ' + sel + ' value="all">All</option>');
-	if (item.Stream.Audio == "none") {
+	if (audioSel == "none") {
 		sel = "selected"
+		audioSelected = ["none"]
 	} else {
 		sel = ""
 	}
@@ -1921,11 +1965,10 @@ async function populateStream(item) {
 	if (item.Stream.AudioList != null) {
 		for (i=0; i<item.Stream.AudioList.length; i++) {
 			sel = ""
-			String(item.Stream.Audio || "").split(',').forEach(function(aid) {
-				if (item.Stream.AudioList[i].Id == aid || aid == "all") {
-					sel = "selected"
-				}
-			});
+			if (audioTrackSelected(item.Stream.AudioList[i], audioSel)) {
+				sel = "selected"
+				audioSelected.push(item.Stream.AudioList[i].Id)
+			}
 
 			dataSubtext = ""
 			if (item.Stream.AudioList[i].Kid == "") {
@@ -1945,6 +1988,9 @@ async function populateStream(item) {
 		}
 	}
 	refreshSelectPicker(aStreamId);
+	if (audioSelected.length > 0) {
+		jqEl(aStreamId).selectpicker('val', audioSelected);
+	}
 
 	jqEl(sStreamId).empty();
 	if (item.Stream.Subtitles == "all") {

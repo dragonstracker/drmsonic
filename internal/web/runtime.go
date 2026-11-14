@@ -484,6 +484,10 @@ func (s *Server) applyTracks(prov *config.Provider, st *config.Stream, video, au
 			st.Audio = "lang=en"
 			changed = true
 		}
+		if resolved := resolveAudioSelection(list, st.Audio); resolved != "" && resolved != st.Audio {
+			st.Audio = resolved
+			changed = true
+		}
 	}
 	if changed {
 		s.mgr.BumpStream(prov.Id, st.Id)
@@ -520,6 +524,73 @@ func bestTrack(list []config.Track) string {
 		}
 	}
 	return best.Id
+}
+
+func resolveAudioSelection(list []config.Track, want string) string {
+	want = strings.TrimSpace(want)
+	if want == "" || want == "all" || want == "none" || len(list) == 0 {
+		return want
+	}
+	parts := strings.Split(want, ",")
+	out := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id := matchAudioTrackID(list, part)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	if len(out) == 0 {
+		return want
+	}
+	return strings.Join(out, ",")
+}
+
+func matchAudioTrackID(list []config.Track, want string) string {
+	for _, t := range list {
+		if t.Id == want {
+			return t.Id
+		}
+	}
+	pref := want
+	switch {
+	case strings.HasPrefix(want, "lang="):
+		pref = strings.TrimPrefix(want, "lang=")
+	case strings.HasPrefix(want, "desc:"):
+		pref = strings.TrimPrefix(want, "desc:")
+	default:
+		return ""
+	}
+	pref = strings.ToLower(strings.TrimSpace(pref))
+	if pref == "" {
+		return ""
+	}
+	aliases := []string{pref}
+	if pref == "en" {
+		aliases = append(aliases, "eng")
+	} else if pref == "eng" {
+		aliases = append(aliases, "en")
+	}
+	for _, t := range list {
+		lang := strings.ToLower(t.Language)
+		desc := strings.ToLower(t.Desc)
+		id := strings.ToLower(t.Id)
+		for _, a := range aliases {
+			if lang == a || desc == a || strings.Contains(id, a) {
+				return t.Id
+			}
+		}
+	}
+	if len(list) == 1 {
+		return list[0].Id
+	}
+	return ""
 }
 
 func bindFor(p *config.Provider, st *config.Stream) string {
