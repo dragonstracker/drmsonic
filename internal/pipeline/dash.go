@@ -60,6 +60,9 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 	if err != nil {
 		return fail(cb, err)
 	}
+	if m.Static && cfg.IgnoreStatic {
+		return endBroadcast(cb)
+	}
 
 	audioTrack := chooseAudioTrack(m.Audio, cfg.Audio)
 	if len(m.Video) == 0 && audioTrack == nil {
@@ -125,6 +128,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 		lastSwitch time.Time
 		idleAt     time.Time
 		loadFails  int
+		pace       = pacer{active: !live}
 	)
 
 	if !live {
@@ -139,6 +143,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 	cb.Info(fmt.Sprintf("DASH %s", m.Type))
 
 	for ctx.Err() == nil {
+		pace.hold(ctx)
 		if time.Since(lastLoad) >= update {
 			fresh, err := loadManifest()
 			if err == nil {
@@ -226,6 +231,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 			if dur > 0 {
 				outDTS += int64(dur * 90000)
 				cb.Publish(muxer.Reset(), dur)
+				pace.add(dur)
 			}
 			continue
 		}
@@ -353,6 +359,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 		}
 		outDTS = videoEnd - base90
 		cb.Publish(segment, dur)
+		pace.add(dur)
 	}
 
 	return nil

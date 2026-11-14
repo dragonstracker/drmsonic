@@ -323,6 +323,7 @@ func (s *Server) supervise(ctx context.Context, prov *config.Provider, st *confi
 		Retries:      retriesFor(prov),
 		FixIVSize:    st.FixIvSize,
 		AllowPrivate: s.opts.AllowPrivate,
+		IgnoreStatic: prov.IgnoreStaticDash,
 	}
 
 	tracks := func(video, audio []pipeline.TrackInfo) {

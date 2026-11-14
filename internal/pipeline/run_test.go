@@ -100,3 +100,32 @@ func TestRunHLSManifestForbidden(t *testing.T) {
 		t.Fatalf("errors = %v", rec.errors)
 	}
 }
+
+func TestRunDASHIgnoreStatic(t *testing.T) {
+	const mpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT4S">
+  <Period>
+    <AdaptationSet mimeType="video/mp4">
+      <SegmentTemplate timescale="1000" duration="2000" initialization="init.mp4" media="$Number$.m4s"/>
+      <Representation id="v" codecs="avc1.4d401f" bandwidth="1000"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		hits++
+		fmt.Fprint(w, mpd)
+	}))
+	defer srv.Close()
+
+	rec := &recorder{}
+	cfg := Config{ManifestURL: srv.URL + "/a.mpd", Mode: "live", AllowPrivate: true, IgnoreStatic: true}
+	err := Run(context.Background(), cfg, rec.callbacks())
+
+	if !errors.Is(err, ErrBroadcastEnded) {
+		t.Fatalf("err = %v, want ErrBroadcastEnded", err)
+	}
+	if hits != 1 || rec.publish != 0 {
+		t.Fatalf("hits = %d, published = %d, want only the manifest fetch", hits, rec.publish)
+	}
+}

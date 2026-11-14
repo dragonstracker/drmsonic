@@ -97,7 +97,7 @@ func (s *Server) startAutostartStreams(p *config.Provider) {
 			continue
 		}
 		ch := s.mgr.Get(p.Id, st.Id)
-		if ch != nil && ch.Running {
+		if ch != nil && (ch.Running || (ch.Ended() && !p.RestartFinished)) {
 			continue
 		}
 		if st.IsEvent && st.Start > 0 {

@@ -7,6 +7,7 @@ import (
 	"drmsonic/internal/mp4"
 )
 
+// DecryptSample decrypts sample in place and returns it; the caller must not reuse the encrypted bytes.
 func DecryptSample(key, iv, sample []byte, subs []mp4.Subsample) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -14,37 +15,28 @@ func DecryptSample(key, iv, sample []byte, subs []mp4.Subsample) ([]byte, error)
 	}
 	counter := make([]byte, 16)
 	copy(counter, iv)
-
 	stream := cipher.NewCTR(block, counter)
 
 	if len(subs) == 0 {
-		out := make([]byte, len(sample))
-		stream.XORKeyStream(out, sample)
-		return out, nil
+		stream.XORKeyStream(sample, sample)
+		return sample, nil
 	}
 
-	out := make([]byte, 0, len(sample))
 	pos := 0
 	for _, sub := range subs {
 		clear := int(sub.Clear)
-		prot := int(sub.Protected)
 		if pos+clear > len(sample) {
-			break
+			return sample[:pos], nil
 		}
-		out = append(out, sample[pos:pos+clear]...)
 		pos += clear
-		if pos+prot > len(sample) {
-			prot = len(sample) - pos
+		n := int(sub.Protected)
+		if pos+n > len(sample) {
+			n = len(sample) - pos
 		}
-		if prot > 0 {
-			part := make([]byte, prot)
-			stream.XORKeyStream(part, sample[pos:pos+prot])
-			out = append(out, part...)
-			pos += prot
+		if n > 0 {
+			stream.XORKeyStream(sample[pos:pos+n], sample[pos:pos+n])
+			pos += n
 		}
 	}
-	if pos < len(sample) {
-		out = append(out, sample[pos:]...)
-	}
-	return out, nil
+	return sample, nil
 }

@@ -114,6 +114,7 @@ func runHLS(ctx context.Context, cfg Config, cb Callbacks) error {
 	var (
 		idleAt    time.Time
 		loadFails int
+		pace      = pacer{active: cfg.Mode == "replay" || pl.EndList}
 	)
 
 	for ctx.Err() == nil {
@@ -129,6 +130,7 @@ func runHLS(ctx context.Context, cfg Config, cb Callbacks) error {
 			}
 			lastSeq = seg.Seq
 			progressed = true
+			pace.hold(ctx)
 
 			body, err := cl.Get(ctx, seg.URL)
 			if err != nil {
@@ -153,6 +155,7 @@ func runHLS(ctx context.Context, cfg Config, cb Callbacks) error {
 
 			if hmedia == nil {
 				cb.Publish(body, seg.Duration)
+				pace.add(seg.Duration)
 				continue
 			}
 
@@ -188,6 +191,7 @@ func runHLS(ctx context.Context, cfg Config, cb Callbacks) error {
 			out := muxer.Reset()
 			if len(out) > 0 {
 				cb.Publish(out, seg.Duration)
+				pace.add(seg.Duration)
 			}
 		}
 

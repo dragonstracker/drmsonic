@@ -9,8 +9,12 @@ Versions follow the release tags on GitHub.
 
 ### Added
 - Video selector `max` (highest bandwidth) and audio selectors `lang=en` / `desc:en`.
+- `IgnoreStaticDash` is honoured: finished (static) DASH events end immediately instead of replaying.
 
 ### Fixed
+- Static DASH and VOD HLS sources are paced to real time (10 s lead) instead of being downloaded and remuxed at ~20x speed, which saturated CPU, bandwidth and memory.
+- Autostart sweep no longer restarts a finished broadcast every minute unless `RestartFinished` is set.
+- Segment downloads allocate the body once from `Content-Length`, and CENC decryption works in place, cutting per-segment copies.
 - Start applies current Manifest/Keys in the same request (no blur/save race).
 - Streams page status/start/stop ids mismatched (`_` vs `~`); running state updates again.
 - Events refresh no longer downgrades a stream that already had Manifest/Keys when the API returns the same id blank.

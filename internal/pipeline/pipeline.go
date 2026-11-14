@@ -46,6 +46,7 @@ type Config struct {
 	Retries      int
 	FixIVSize    bool
 	AllowPrivate bool
+	IgnoreStatic bool
 }
 
 type KeySet struct {

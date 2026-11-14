@@ -74,3 +74,22 @@ func TestOnDemandIdleFloor(t *testing.T) {
 		t.Fatalf("idle limit %s, want 600s", got)
 	}
 }
+
+func TestAutostartSkipsEndedBroadcast(t *testing.T) {
+	prov := &config.Provider{Id: "willow", Name: "willow", RunningMode: config.RunInternalRemuxer, OutputMode: config.OutDirectHLS}
+	prov.Streams = []config.Stream{{Id: "ended", Name: "ended", Mode: config.ModeLive, Autostart: true}}
+	s := testServer(t, Options{}, nil, prov)
+	s.mgr.Ensure("willow", "ended").StatusLine = "Broadcast ended"
+
+	s.startAutostartStreams(prov)
+	if ch := s.mgr.Get("willow", "ended"); ch == nil || ch.Running {
+		t.Fatalf("ended broadcast was autostarted again")
+	}
+
+	prov.RestartFinished = true
+	s.startAutostartStreams(prov)
+	if ch := s.mgr.Get("willow", "ended"); ch == nil || !ch.Running {
+		t.Fatalf("RestartFinished did not restart the ended broadcast")
+	}
+	s.StopAll()
+}

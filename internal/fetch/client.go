@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+const maxBody = 256 << 20
+
 type Options struct {
 	UserAgent    string
 	Bind         string
@@ -146,11 +148,18 @@ func (c *Client) get(ctx context.Context, rawURL, byteRange string) ([]byte, err
 		io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 		return nil, &StatusError{Code: resp.StatusCode, URL: rawURL}
 	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	return readBody(resp)
+}
+
+func readBody(resp *http.Response) ([]byte, error) {
+	if n := resp.ContentLength; n > 0 && n <= maxBody {
+		body := make([]byte, n)
+		if _, err := io.ReadFull(resp.Body, body); err != nil {
+			return nil, err
+		}
+		return body, nil
 	}
-	return body, nil
+	return io.ReadAll(resp.Body)
 }
 
 func (c *Client) checkURL(rawURL string) error {
