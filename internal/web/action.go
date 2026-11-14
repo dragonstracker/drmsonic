@@ -143,7 +143,9 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		s.acDeleteProvider(w, req)
 	case "renameprovider":
 		s.acRenameProvider(w, req)
-	case "refresh", "rescanproviders":
+	case "refresh":
+		s.acRefreshStreams(w, req)
+	case "rescanproviders":
 		if err := s.store.Load(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -414,9 +416,15 @@ func (s *Server) acStartStop(w http.ResponseWriter, req actionRequest) {
 		}
 		switch req.Action {
 		case "start":
+			if err := s.probeStreamTracks(p, st); err == nil {
+				dirty = true
+			}
 			s.startChannel(p, st)
 		case "restart":
 			s.stopChannel(p.Id, st.Id)
+			if err := s.probeStreamTracks(p, st); err == nil {
+				dirty = true
+			}
 			s.startChannel(p, st)
 		default:
 			s.stopChannel(p.Id, st.Id)

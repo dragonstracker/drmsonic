@@ -16,6 +16,7 @@ Versions follow the release tags on GitHub.
 - Events refresh no longer downgrades a stream that already had Manifest/Keys when the API returns the same id blank.
 - Events auto-remove no longer deletes streams that still have Manifest/Keys (manual paste / managed rows survive refresh).
 - Quality/track dropdown appears after MPD parse: track discovery no longer blocked by IgnoreUpdate, UI refreshes on track list change.
+- Action `refresh` (R) probes the manifest and fills VideoList/AudioList (o11 parity); Start/Restart probes before remux so Best video is not stuck on unknown when remux fails early.
 
 ## [1.1.4] — 2026-11-11
 

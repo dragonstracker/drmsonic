@@ -1626,19 +1626,26 @@ async function refreshClick(e) {
 		idsList = getStreamId(this.id)
 	}
 
+	var streamEntry = { Id: idsList }
+	if (this.id != 'refreshall' && this.id != 'refreshpage') {
+		var body = streamStartPayload(getId(this.id))
+		if (body.ManifestUrl) {
+			streamEntry.ManifestUrl = body.ManifestUrl
+		}
+		if (body.Keys) {
+			streamEntry.Keys = body.Keys
+		}
+	}
+
 	data = {
 		Action : "refresh",
 		ProviderId : document.getElementById('providerSelection').options[document.getElementById('providerSelection').selectedIndex].value,
-		Streams: [
-			{
-				Id : idsList,
-			},
-		]
+		Streams: [ streamEntry ]
 	}
 
 	displayLoading(globalloader);
 	let response = await fetch(document.getElementById('baseUrl').value+'api/action', {
-		method: 'POST', // or 'PUT'
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
@@ -1652,7 +1659,6 @@ async function refreshClick(e) {
 	} else {
 		document.getElementById('saveall').removeAttribute("disabled");
 		document.getElementById('saveprovider').removeAttribute("disabled");
-
 	}
 
 };
