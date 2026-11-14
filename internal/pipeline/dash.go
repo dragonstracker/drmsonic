@@ -61,16 +61,15 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 		return fail(cb, err)
 	}
 
-	videoTrack := chooseVideo(m.Video, cfg.Video)
 	audioTrack := chooseAudioTrack(m.Audio, cfg.Audio)
-	if videoTrack == nil && audioTrack == nil {
+	if len(m.Video) == 0 && audioTrack == nil {
 		return fail(cb, errors.New("no playable tracks in manifest"))
 	}
 
 	cb.Status("Loading")
 	var vSrc, aSrc *streamState
-	if videoTrack != nil {
-		vSrc, err = openStream(ctx, cl, videoTrack, keys, cfg.FixIVSize, true)
+	if len(m.Video) > 0 {
+		vSrc, err = openVideo(ctx, cl, m.Video, cfg.Video, keys, cfg.FixIVSize)
 		if err != nil {
 			if audioTrack == nil {
 				return fail(cb, err)
@@ -148,6 +147,10 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 				if vSrc != nil {
 					if t := findTrack(fresh.Video, vSrc.track.ID); t != nil {
 						vSrc.track = t
+					} else if next, oerr := openVideo(ctx, cl, fresh.Video, cfg.Video, keys, cfg.FixIVSize); oerr == nil {
+						vSrc = next
+						vSrc.last = -1
+						pending = nil
 					}
 				}
 				if aSrc != nil {
@@ -233,6 +236,14 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 			if errors.Is(err, ErrMissingKey) {
 				return fail(cb, err)
 			}
+			if endedStatus(err) {
+				if next := switchVideo(ctx, cl, m.Video, vSrc, cfg.Video, keys, cfg.FixIVSize); next != nil {
+					vSrc = next
+					pending = nil
+					lastSwitch = time.Now()
+					continue
+				}
+			}
 			cb.Error(Describe(err))
 			wait(ctx, time.Second)
 			continue
@@ -240,7 +251,7 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 		vSrc.last = vRef.Time
 
 		segSeconds := float64(vRef.Duration) / float64(vSrc.track.Timescale)
-		autoQuality := cfg.Video == "" || cfg.Video == "all"
+		autoQuality := cfg.Video == "" || cfg.Video == "all" || cfg.Video == "best" || cfg.Video == "max"
 		if autoQuality && segSeconds > 0 && elapsed.Seconds() > segSeconds*1.5 && time.Since(lastSwitch) > 30*time.Second {
 			if lower := lowerVideo(m.Video, vSrc.track.Bandwidth); lower != nil {
 				if next, oerr := openStream(ctx, cl, lower, keys, cfg.FixIVSize, true); oerr == nil {
@@ -460,6 +471,70 @@ func findTrack(tracks []manifest.Track, id string) *manifest.Track {
 		}
 	}
 	return nil
+}
+
+func openVideo(ctx context.Context, cl *fetch.Client, tracks []manifest.Track, want string, keys *KeySet, fixIV bool) (*streamState, error) {
+	var last error
+	for _, t := range videoTryOrder(tracks, want) {
+		s, err := openStream(ctx, cl, t, keys, fixIV, true)
+		if err == nil {
+			return s, nil
+		}
+		last = err
+		if !endedStatus(err) {
+			return nil, err
+		}
+	}
+	if last != nil {
+		return nil, last
+	}
+	return nil, errors.New("no playable video track")
+}
+
+func switchVideo(ctx context.Context, cl *fetch.Client, tracks []manifest.Track, cur *streamState, want string, keys *KeySet, fixIV bool) *streamState {
+	curID := ""
+	if cur != nil && cur.track != nil {
+		curID = cur.track.ID
+	}
+	for _, t := range videoTryOrder(tracks, want) {
+		if t.ID == curID {
+			continue
+		}
+		s, err := openStream(ctx, cl, t, keys, fixIV, true)
+		if err == nil {
+			s.last = -1
+			return s
+		}
+		if !endedStatus(err) {
+			return nil
+		}
+	}
+	return nil
+}
+
+func videoTryOrder(tracks []manifest.Track, want string) []*manifest.Track {
+	if len(tracks) == 0 {
+		return nil
+	}
+	primary := chooseVideo(tracks, want)
+	out := make([]*manifest.Track, 0, len(tracks))
+	seen := make(map[string]bool, len(tracks))
+	if primary != nil {
+		out = append(out, primary)
+		seen[primary.ID] = true
+	}
+	sorted := append([]manifest.Track{}, tracks...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].Bandwidth > sorted[j].Bandwidth
+	})
+	for i := range sorted {
+		if seen[sorted[i].ID] {
+			continue
+		}
+		seen[sorted[i].ID] = true
+		out = append(out, &sorted[i])
+	}
+	return out
 }
 
 func lowerVideo(tracks []manifest.Track, bandwidth int) *manifest.Track {

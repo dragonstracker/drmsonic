@@ -452,8 +452,8 @@ func (s *Server) applyTracks(prov *config.Provider, st *config.Stream, video, au
 			st.VideoList = list
 			changed = true
 		}
-		if st.Video == "" || st.Video == "best" {
-			st.Video = "max"
+		if st.Video == "" || st.Video == "max" {
+			st.Video = "best"
 			changed = true
 		}
 	}

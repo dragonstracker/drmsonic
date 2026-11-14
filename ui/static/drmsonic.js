@@ -286,7 +286,7 @@ function streamFormPayload(n) {
 		Mode: selectedValue(document.getElementById('mode' + n)),
 		RunningMode: selectedValue(document.getElementById('runningmode' + n)),
 		OutputMode: selectedValue(document.getElementById('outputmode' + n)),
-		VStreamId: jqEl('vStreamId' + n).val() || "max",
+		VStreamId: jqEl('vStreamId' + n).val() || "best",
 		AStreamId: joinMultiSelect('aStreamId' + n) || "lang=en",
 		SStreamId: joinMultiSelect('sStreamId' + n),
 		CdmType: selectedValue(document.getElementById('cdmtype' + n)),
@@ -334,7 +334,7 @@ function refreshSelectPicker(id) {
 function streamStartPayload(n) {
 	var payload = {
 		Id: getStreamId(n),
-		VStreamId: "max",
+		VStreamId: "best",
 		AStreamId: "lang=en"
 	}
 	var urlEl = document.getElementById('manifestUrl' + n)
@@ -740,7 +740,7 @@ async function startStopClick(e, id) {
 		if (streamPayload.Keys) {
 			prev.Keys = String(streamPayload.Keys).split(/\r?\n/).map(function(x){ return x.trim() }).filter(Boolean)
 		}
-		prev.Video = streamPayload.VStreamId || "max"
+		prev.Video = streamPayload.VStreamId || "best"
 		prev.Audio = streamPayload.AStreamId || "lang=en"
 		streamsPrevParams.set(n, prev)
 	}
@@ -1870,12 +1870,9 @@ async function populateStream(item) {
 
 	jqEl(vStreamId).empty();
 
-	var videoSel = item.Stream.Video || "max";
-	if (videoSel == "best") {
-		videoSel = "max";
-	}
-	sel = (videoSel == "max" || videoSel == "") ? "selected" : "";
-	jqEl(vStreamId).append('<option ' + sel + ' value="max">Max quality</option>');
+	var videoSel = item.Stream.Video || "best";
+	sel = (videoSel == "best" || videoSel == "" || videoSel == "max") ? "selected" : "";
+	jqEl(vStreamId).append('<option ' + sel + ' value="best">Best quality</option>');
 	sel = (videoSel == "all") ? "selected" : "";
 	jqEl(vStreamId).append('<option ' + sel + ' value="all">All qualities</option>');
 
