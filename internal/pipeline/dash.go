@@ -177,6 +177,11 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 			if ref, ok := pickNextSrc(vSrc, live); ok {
 				vRef = ref
 				haveVideo = true
+			} else if live && reanchorLive(vSrc) {
+				if ref, ok := pickNextSrc(vSrc, live); ok {
+					vRef = ref
+					haveVideo = true
+				}
 			}
 		}
 		videoAt := time.Now()
@@ -437,6 +442,37 @@ func pickNextSrc(s *streamState, live bool) (manifest.SegmentRef, bool) {
 		return manifest.SegmentRef{}, false
 	}
 	return pickFromRefs(refs, s.last, live)
+}
+
+func liveTail(s *streamState) []manifest.SegmentRef {
+	if s == nil || s.track == nil {
+		return nil
+	}
+	if s.track.SegBase != nil {
+		return s.track.RangeSegments(s.sidx, 6)
+	}
+	return s.track.TailSegments(6)
+}
+
+func reanchorLive(s *streamState) bool {
+	if s == nil || s.last < 0 {
+		return false
+	}
+	refs := liveTail(s)
+	if len(refs) == 0 {
+		return false
+	}
+	maxT := refs[0].Time
+	for _, r := range refs[1:] {
+		if r.Time > maxT {
+			maxT = r.Time
+		}
+	}
+	if maxT > s.last {
+		return false
+	}
+	s.last = -1
+	return true
 }
 
 func pickFromRefs(refs []manifest.SegmentRef, last int64, live bool) (manifest.SegmentRef, bool) {
