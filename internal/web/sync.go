@@ -205,6 +205,12 @@ func preserveStreamMedia(prev, next config.Stream) config.Stream {
 	if strings.TrimSpace(next.Audio) == "" && strings.TrimSpace(prev.Audio) != "" {
 		next.Audio = prev.Audio
 	}
+	if len(next.VideoList) == 0 && len(prev.VideoList) > 0 {
+		next.VideoList = append([]config.Track{}, prev.VideoList...)
+	}
+	if len(next.AudioList) == 0 && len(prev.AudioList) > 0 {
+		next.AudioList = append([]config.Track{}, prev.AudioList...)
+	}
 	return next
 }
 

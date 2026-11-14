@@ -161,6 +161,16 @@ func (m *Manager) BumpGlobal() {
 	m.mu.Unlock()
 }
 
+func (m *Manager) BumpStream(provider, stream string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.channels[key(provider, stream)]
+	if !ok {
+		return
+	}
+	c.PChange++
+}
+
 func (m *Manager) Global() uint64 {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -270,9 +280,7 @@ func BuildStatus(store *config.Store, m *Manager, baseURL string) StatusResponse
 				CurrentNetworkScope: st.NetworkScope,
 				StreamingUrl:        fmt.Sprintf("%s/stream/%s/%s/master.m3u8", baseURL, p.Id, st.Id),
 			}
-			if st.Video != "" {
-				ss.CurrentVideo = videoInfo(st)
-			}
+			ss.CurrentVideo = currentVideoLabel(st)
 			ss.ManifestInfo = videoInfo(st)
 			ss.StreamInfo = streamInfo(st)
 			if ch != nil {
@@ -302,6 +310,21 @@ func BuildStatus(store *config.Store, m *Manager, baseURL string) StatusResponse
 	return resp
 }
 
+func currentVideoLabel(st *config.Stream) string {
+	if len(st.VideoList) == 0 {
+		return ""
+	}
+	want := strings.TrimSpace(st.Video)
+	if want != "" && want != "best" && want != "max" && want != "all" {
+		for _, t := range st.VideoList {
+			if t.Id == want {
+				return t.Desc
+			}
+		}
+	}
+	return st.VideoList[0].Desc
+}
+
 func videoInfo(st *config.Stream) string {
 	kind := "dash"
 	switch {
@@ -311,8 +334,8 @@ func videoInfo(st *config.Stream) string {
 		kind = "smooth"
 	}
 	best := "unknown"
-	if len(st.VideoList) > 0 {
-		best = st.VideoList[0].Desc
+	if label := currentVideoLabel(st); label != "" {
+		best = label
 	}
 	return fmt.Sprintf("Format: <i><b>%s (%s)</b></i><br>Best video: <i><b>%s</b></i><br>", kind, st.Mode, best)
 }

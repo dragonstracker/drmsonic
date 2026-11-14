@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -420,18 +421,23 @@ func firstRendition(st *config.Stream) string {
 }
 
 func (s *Server) applyTracks(prov *config.Provider, st *config.Stream, video, audio []pipeline.TrackInfo) bool {
-	if st.IgnoreUpdate {
-		return false
-	}
 	changed := false
 	wasSingle := len(renditionIDs(st)) <= 1
 
 	if len(video) > 0 {
 		list := make([]config.Track, 0, len(video))
 		for _, t := range video {
+			desc := t.Desc
+			if desc == "" || desc == "0x0" {
+				if t.Height > 0 {
+					desc = fmt.Sprintf("%dp", t.Height)
+				} else {
+					desc = t.ID
+				}
+			}
 			list = append(list, config.Track{
 				Id:        t.ID,
-				Desc:      t.Desc,
+				Desc:      desc,
 				Codecs:    t.Codecs,
 				Width:     t.Width,
 				Height:    t.Height,
@@ -439,23 +445,31 @@ func (s *Server) applyTracks(prov *config.Provider, st *config.Stream, video, au
 				Kid:       t.Kid,
 			})
 		}
+		sort.SliceStable(list, func(i, j int) bool {
+			return list[i].Bandwidth > list[j].Bandwidth
+		})
 		if !sameTracks(st.VideoList, list) {
 			st.VideoList = list
 			changed = true
 		}
-		if st.Video == "" {
-			if best := bestTrack(list); best != "" {
-				st.Video = best
-				changed = true
-			}
+		if st.Video == "" || st.Video == "best" {
+			st.Video = "max"
+			changed = true
 		}
 	}
 	if len(audio) > 0 {
 		list := make([]config.Track, 0, len(audio))
 		for _, t := range audio {
+			desc := t.Desc
+			if desc == "" {
+				desc = t.Lang
+			}
+			if desc == "" {
+				desc = t.ID
+			}
 			list = append(list, config.Track{
 				Id:        t.ID,
-				Desc:      t.Desc,
+				Desc:      desc,
 				Codecs:    t.Codecs,
 				Bandwidth: t.Bandwidth,
 				Language:  t.Lang,
@@ -467,11 +481,12 @@ func (s *Server) applyTracks(prov *config.Provider, st *config.Stream, video, au
 			changed = true
 		}
 		if st.Audio == "" {
-			if best := bestTrack(list); best != "" {
-				st.Audio = best
-				changed = true
-			}
+			st.Audio = "lang=en"
+			changed = true
 		}
+	}
+	if changed {
+		s.mgr.BumpStream(prov.Id, st.Id)
 	}
 	if changed && wasSingle && st.Video == "all" && len(renditionIDs(st)) > 1 {
 		go func() {

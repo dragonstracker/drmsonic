@@ -692,9 +692,13 @@ func (s *streamState) fetch(ctx context.Context, cl *fetch.Client, ref manifest.
 func reportTracks(cb Callbacks, m *manifest.Manifest, vSrc, aSrc *streamState) {
 	var video, audio []TrackInfo
 	for _, t := range m.Video {
+		desc := fmt.Sprintf("%dx%d", t.Width, t.Height)
+		if t.Height > 0 {
+			desc = fmt.Sprintf("%dp (%dx%d)", t.Height, t.Width, t.Height)
+		}
 		video = append(video, TrackInfo{
 			ID:        t.ID,
-			Desc:      fmt.Sprintf("%dx%d", t.Width, t.Height),
+			Desc:      desc,
 			Codecs:    t.Codecs,
 			Width:     t.Width,
 			Height:    t.Height,
