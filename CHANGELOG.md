@@ -17,6 +17,7 @@ Versions follow the release tags on GitHub.
 - Events auto-remove no longer deletes streams that still have Manifest/Keys (manual paste / managed rows survive refresh).
 - Quality/track dropdown appears after MPD parse: track discovery no longer blocked by IgnoreUpdate, UI refreshes on track list change.
 - Action `refresh` (R) probes the manifest and fills VideoList/AudioList (o11 parity); Start/Restart probes before remux so Best video is not stuck on unknown when remux fails early.
+- Quality dropdown appears after probe on stopped streams: BumpStream now creates channel state so the panel reloads VideoList into the select.
 
 ## [1.1.4] — 2026-11-11
 

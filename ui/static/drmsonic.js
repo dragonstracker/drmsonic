@@ -308,6 +308,18 @@ function streamFormPayload(n) {
 	return payload
 }
 
+function refreshSelectPicker(sel) {
+	var $el = $(sel);
+	if ($el.length === 0) {
+		return;
+	}
+	if ($el.data('selectpicker')) {
+		$el.selectpicker('refresh');
+	} else {
+		$el.selectpicker();
+	}
+}
+
 function streamStartPayload(n) {
 	var payload = {
 		Id: getStreamId(n),
@@ -1659,6 +1671,13 @@ async function refreshClick(e) {
 	} else {
 		document.getElementById('saveall').removeAttribute("disabled");
 		document.getElementById('saveprovider').removeAttribute("disabled");
+		if (this.id != 'refreshall' && this.id != 'refreshpage') {
+			PChangeCounter[getStreamId(this.id)] = -1;
+		} else {
+			Object.keys(PChangeCounter).forEach(function(k) {
+				PChangeCounter[k] = -1;
+			});
+		}
 	}
 
 };
@@ -1855,7 +1874,7 @@ async function populateStream(item) {
 			$('#' + vStreamId).append('<option ' + sel + ' data-subtext="' + dataSubtext + '" value="'+item.Stream.VideoList[i].Id+'">'+item.Stream.VideoList[i].Desc+'</option>');
 		}
 	}
-	$('#' + vStreamId).selectpicker("refresh");
+	refreshSelectPicker('#' + vStreamId);
 
 	// Audio
 	var aStreamId = 'aStreamId' + id
@@ -1875,8 +1894,8 @@ async function populateStream(item) {
 	if (item.Stream.AudioList != null) {
 		for (i=0; i<item.Stream.AudioList.length; i++) {
 			sel = ""
-			item.Stream.Audio.split(',').forEach(function(id) {
-				if (item.Stream.AudioList[i].Id == id || id == "all") {
+			String(item.Stream.Audio || "").split(',').forEach(function(aid) {
+				if (item.Stream.AudioList[i].Id == aid || aid == "all") {
 					sel = "selected"
 				}
 			});
@@ -1898,7 +1917,7 @@ async function populateStream(item) {
 			$('#' + aStreamId).append('<option ' + sel + ' data-subtext="' + dataSubtext + '" value="'+item.Stream.AudioList[i].Id+'">'+item.Stream.AudioList[i].Desc+'</option>');
 		}
 	}
-	$('#' + aStreamId).selectpicker("refresh");
+	refreshSelectPicker('#' + aStreamId);
 
 	// Subtitles
 	var sStreamId = 'sStreamId' + id
@@ -1912,8 +1931,8 @@ async function populateStream(item) {
 	if (item.Stream.SubtitlesList != null) {
 		for (i=0; i<item.Stream.SubtitlesList.length; i++) {
 			sel = ""
-			item.Stream.Subtitles.split(',').forEach(function(id) {
-				if (item.Stream.SubtitlesList[i].Id == id || id == "all") {
+			String(item.Stream.Subtitles || "").split(',').forEach(function(sid) {
+				if (item.Stream.SubtitlesList[i].Id == sid || sid == "all") {
 					sel = "selected"
 				}
 			});
@@ -1921,7 +1940,7 @@ async function populateStream(item) {
 			$('#' + sStreamId).append('<option ' + sel + ' value="'+item.Stream.SubtitlesList[i].Id+'">'+item.Stream.SubtitlesList[i].Desc+'</option>');
 		}
 	}
-	$('#' + sStreamId).selectpicker("refresh");
+	refreshSelectPicker('#' + sStreamId);
 
 	vStreamIdDiv = 'vStreamIdDiv' + id
 	aStreamIdDiv = 'aStreamIdDiv' + id
@@ -2194,8 +2213,13 @@ async function updateStreamsBody(table, init, providerId) {
 		GlobalChangeCounter = -1;
 	}
 
+	var confIds = idsList
+	if (confIds == '' && data.GlobalChangeCounter > GlobalChangeCounter) {
+		confIds = getVisibleIds()
+	}
+
 	if (idsList != '' || pendingConf || data.GlobalChangeCounter > GlobalChangeCounter) {
-		let response = pendingConf ? await pendingConf : await requestConf(providerId, idsList)
+		let response = pendingConf ? await pendingConf : await requestConf(providerId, confIds)
 
 		if (!response) {
 			return
@@ -2714,9 +2738,9 @@ async function updateStreamsBody(table, init, providerId) {
 							document.getElementById('timeRangeDiv' + n).style.display = 'none';
 						}
 
-						$('#vStreamId' + n).selectpicker("refresh");
-						$('#aStreamId' + n).selectpicker("refresh");
-						$('#sStreamId' + n).selectpicker("refresh");
+						refreshSelectPicker('#vStreamId' + n);
+						refreshSelectPicker('#aStreamId' + n);
+						refreshSelectPicker('#sStreamId' + n);
 
 						text = 'Please refresh for more info';
 

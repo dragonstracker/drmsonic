@@ -164,9 +164,11 @@ func (m *Manager) BumpGlobal() {
 func (m *Manager) BumpStream(provider, stream string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	c, ok := m.channels[key(provider, stream)]
+	k := key(provider, stream)
+	c, ok := m.channels[k]
 	if !ok {
-		return
+		c = &Channel{Provider: provider, Stream: stream}
+		m.channels[k] = c
 	}
 	c.PChange++
 }

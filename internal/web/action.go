@@ -419,11 +419,25 @@ func (s *Server) acStartStop(w http.ResponseWriter, req actionRequest) {
 			if err := s.probeStreamTracks(p, st); err == nil {
 				dirty = true
 			}
+			if dirty {
+				if err := s.store.Put(p); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				dirty = false
+			}
 			s.startChannel(p, st)
 		case "restart":
 			s.stopChannel(p.Id, st.Id)
 			if err := s.probeStreamTracks(p, st); err == nil {
 				dirty = true
+			}
+			if dirty {
+				if err := s.store.Put(p); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				dirty = false
 			}
 			s.startChannel(p, st)
 		default:
