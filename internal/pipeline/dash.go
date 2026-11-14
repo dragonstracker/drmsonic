@@ -178,6 +178,9 @@ func runDASH(ctx context.Context, cfg Config, cb Callbacks) error {
 				vRef = ref
 				haveVideo = true
 			} else if live && reanchorLive(vSrc) {
+				if aSrc != nil {
+					reanchorLive(aSrc)
+				}
 				if ref, ok := pickNextSrc(vSrc, live); ok {
 					vRef = ref
 					haveVideo = true
@@ -468,10 +471,14 @@ func reanchorLive(s *streamState) bool {
 			maxT = r.Time
 		}
 	}
-	if maxT > s.last {
+	if s.last <= maxT {
 		return false
 	}
-	s.last = -1
+	if len(refs) >= 2 {
+		s.last = refs[len(refs)-2].Time
+	} else {
+		s.last = refs[0].Time - 1
+	}
 	return true
 }
 
